@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Valuation Assistant</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- 헤더 -->
+        <header class="header">
+            <h1>Valuation Assistant</h1>
+            <nav class="nav-steps">
+                <div class="step active" data-step="1">
+                    <span class="step-number">1</span>
+                    <span class="step-title">재무 구조 분석</span>
+                </div>
+                <div class="step" data-step="2">
+                    <span class="step-number">2</span>
+                    <span class="step-title">시나리오 모델링</span>
+                </div>
+                <div class="step" data-step="3">
+                    <span class="step-number">3</span>
+                    <span class="step-title">시뮬레이션</span>
+                </div>
+                <div class="step" data-step="4">
+                    <span class="step-number">4</span>
+                    <span class="step-title">투자 분석</span>
+                </div>
+            </nav>
+            <!-- 데이터 관리 버튼 -->
+            <div class="data-actions-header">
+                <button type="button" id="exportData" class="btn-export">데이터 내보내기</button>
+                <button type="button" id="importData" class="btn-import">데이터 가져오기</button>
+                <input type="file" id="importFile" accept=".json" style="display: none;">
+            </div>
+        </header>
+
+        <!-- 메인 컨텐츠 -->
+        <main class="main-content">
+            <!-- Page 1: 재무 구조 분석 -->
+            <div class="page active" id="page1">
+                <h2>재무 구조 분석</h2>
+                <div class="form-section">
+                    <h3>기업 정보 및 핵심 가정</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="companyName">기업명</label>
+                            <input type="text" id="companyName" placeholder="기업명을 입력하세요">
+                        </div>
+                        <div class="form-group">
+                            <label for="discountRate">할인율 (%)</label>
+                            <input type="number" id="discountRate" value="10" step="0.1" min="0" max="50">
+                        </div>
+                        <div class="form-group">
+                            <label for="taxRate">법인세율 (%)</label>
+                            <input type="number" id="taxRate" value="25" step="0.1" min="0" max="50">
+                        </div>
+                        <div class="form-group">
+                            <label for="forecastPeriod">예측 기간 (년)</label>
+                            <input type="number" id="forecastPeriod" value="15" min="1" max="30">
+                        </div>
+                        <div class="form-group">
+                            <label for="terminalGrowthRate">영구 성장률 (%)</label>
+                            <input type="number" id="terminalGrowthRate" value="2.5" step="0.1" min="0" max="10">
+                        </div>
+                        <div class="form-group">
+                            <label for="marketValue">현재 기업가치</label>
+                            <input type="text" id="marketValue" placeholder="현재 기업가치를 입력하세요">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>AI 기업 분석</h3>
+                    <div class="form-group">
+                        <label for="apiKey">Google AI Studio API 키</label>
+                        <input type="password" id="apiKey" placeholder="Google AI Studio에서 발급받은 API 키를 입력하세요">
+                        <small class="form-help">
+                            <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer">API 키 발급받기</a>
+                        </small>
+                    </div>
+                    <button type="button" id="analyzeCompany" class="btn-primary">기업 분석 요청</button>
+                    <div id="aiAnalysisResult" class="ai-analysis-box" style="display: none;">
+                        <h4>AI 분석 결과</h4>
+                        <div id="aiAnalysisContent"></div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>손익계산서 (기준 연도)</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>매출</label>
+                            <input type="text" id="revenue" placeholder="매출액" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>매출원가</label>
+                            <input type="text" id="costOfGoodsSold" placeholder="매출원가" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label>매출총이익</label>
+                            <input type="text" id="grossProfit" placeholder="매출총이익" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label>영업이익 (EBIT)</label>
+                            <input type="text" id="operatingIncome" placeholder="영업이익" min="0">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>사업부문 설정</h3>
+                    <div id="businessSegments">
+                        <div class="segment-item">
+                            <div class="segment-input-group">
+                                <label>사업부문</label>
+                                <input type="text" placeholder="사업부문명" class="segment-name">
+                            </div>
+                            <div class="segment-input-group">
+                                <label>매출액</label>
+                                <input type="text" placeholder="매출액" class="segment-revenue" min="0">
+                            </div>
+                            <button type="button" class="btn-remove-segment">삭제</button>
+                        </div>
+                    </div>
+                    <button type="button" id="addSegment" class="btn-secondary">+ 사업부문 추가</button>
+                    
+                    <!-- 기타 사업부문 (자동 계산) -->
+                    <div class="segment-item other-segment">
+                        <div class="segment-input-group">
+                            <label>사업부문</label>
+                            <input type="text" value="기타 (Other)" readonly>
+                        </div>
+                        <div class="segment-input-group">
+                            <label>매출액</label>
+                            <input type="text" id="other-segment-revenue" placeholder="자동 계산" readonly>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>비용 구조 분석</h3>
+                    <div class="cost-structure">
+                        <div class="cost-item">
+                            <label>매출원가</label>
+                            <div class="cost-input-group">
+                                <label>금액</label>
+                                <input type="text" id="cogs-amount" placeholder="금액" min="0" readonly>
+                            </div>
+                            <div class="slider-container">
+                                <div class="slider-group">
+                                    <div class="ratio-display-new">
+                                        <span class="variable-label-new">변동비</span>
+                                        <span class="variable-ratio-new" id="cogs-variable-value">80%</span>
+                                        <span class="ratio-separator-new">-</span>
+                                        <span class="fixed-ratio-new" id="cogs-fixed-value">20%</span>
+                                        <span class="fixed-label-new">고정비</span>
+                                    </div>
+                                    <input type="range" id="cogs-variable" class="slider-input" value="80" min="0" max="100">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="cost-item">
+                            <label>감가상각비</label>
+                            <div class="cost-input-group">
+                                <label>금액</label>
+                                <input type="text" id="depreciation-amount" placeholder="금액" min="0">
+                            </div>
+                            <div class="slider-container">
+                                <div class="slider-group">
+                                    <div class="ratio-display-new">
+                                        <span class="variable-label-new">변동비</span>
+                                        <span class="variable-ratio-new" id="depreciation-variable-value">0%</span>
+                                        <span class="ratio-separator-new">-</span>
+                                        <span class="fixed-ratio-new" id="depreciation-fixed-value">100%</span>
+                                        <span class="fixed-label-new">고정비</span>
+                                    </div>
+                                    <input type="range" id="depreciation-variable" class="slider-input" value="0" min="0" max="100">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="cost-item">
+                            <label>인건비</label>
+                            <div class="cost-input-group">
+                                <label>금액</label>
+                                <input type="text" id="labor-amount" placeholder="금액" min="0">
+                            </div>
+                            <div class="slider-container">
+                                <div class="slider-group">
+                                    <div class="ratio-display-new">
+                                        <span class="variable-label-new">변동비</span>
+                                        <span class="variable-ratio-new" id="labor-variable-value">30%</span>
+                                        <span class="ratio-separator-new">-</span>
+                                        <span class="fixed-ratio-new" id="labor-fixed-value">70%</span>
+                                        <span class="fixed-label-new">고정비</span>
+                                    </div>
+                                    <input type="range" id="labor-variable" class="slider-input" value="30" min="0" max="100">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="cost-item">
+                            <label>연구개발비</label>
+                            <div class="cost-input-group">
+                                <label>금액</label>
+                                <input type="text" id="rd-amount" placeholder="금액" min="0">
+                            </div>
+                            <div class="slider-container">
+                                <div class="slider-group">
+                                    <div class="ratio-display-new">
+                                        <span class="variable-label-new">변동비</span>
+                                        <span class="variable-ratio-new" id="rd-variable-value">20%</span>
+                                        <span class="ratio-separator-new">-</span>
+                                        <span class="fixed-ratio-new" id="rd-fixed-value">80%</span>
+                                        <span class="fixed-label-new">고정비</span>
+                                    </div>
+                                    <input type="range" id="rd-variable" class="slider-input" value="20" min="0" max="100">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="cost-item">
+                            <label>광고선전비</label>
+                            <div class="cost-input-group">
+                                <label>금액</label>
+                                <input type="text" id="advertising-amount" placeholder="금액" min="0">
+                            </div>
+                            <div class="slider-container">
+                                <div class="slider-group">
+                                    <div class="ratio-display-new">
+                                        <span class="variable-label-new">변동비</span>
+                                        <span class="variable-ratio-new" id="advertising-variable-value">60%</span>
+                                        <span class="ratio-separator-new">-</span>
+                                        <span class="fixed-ratio-new" id="advertising-fixed-value">40%</span>
+                                        <span class="fixed-label-new">고정비</span>
+                                    </div>
+                                    <input type="range" id="advertising-variable" class="slider-input" value="60" min="0" max="100">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="cost-item other-cost">
+                            <label>기타 비용</label>
+                            <div class="cost-input-group">
+                                <label>금액</label>
+                                <input type="text" id="other-amount" placeholder="금액" min="0" readonly>
+                            </div>
+                            <div class="slider-container">
+                                <div class="slider-group">
+                                    <div class="ratio-display-new">
+                                        <span class="variable-label-new">변동비</span>
+                                        <span class="variable-ratio-new" id="other-variable-value">40%</span>
+                                        <span class="ratio-separator-new">-</span>
+                                        <span class="fixed-ratio-new" id="other-fixed-value">60%</span>
+                                        <span class="fixed-label-new">고정비</span>
+                                    </div>
+                                    <input type="range" id="other-variable" class="slider-input" value="40" min="0" max="100">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="cost-model-check">
+                        <button type="button" id="costModelCheck" class="btn-primary">Cost Model Check</button>
+                    </div>
+                </div>
+
+
+
+                <div class="form-actions">
+                    <button type="button" id="nextToPage2" class="btn-primary">다음 단계로</button>
+                </div>
+            </div>
+
+            <!-- Page 2: 확률론적 시나리오 모델링 -->
+            <div class="page" id="page2">
+                <h2>확률론적 시나리오 모델링</h2>
+                <div id="segmentScenarios">
+                    <!-- 사업부문별 시나리오가 동적으로 생성됨 -->
+                </div>
+                
+                <div class="form-section">
+                    <h3>고정비 성장률 시나리오</h3>
+                    <div class="fixed-cost-scenarios">
+                        <div class="cost-scenario">
+                            <label>매출원가 고정비</label>
+                            <div class="scenario-input-group">
+                                <label>평균 성장률 (%)</label>
+                                <input type="number" id="cogs-fixed-mean" placeholder="평균 성장률 (%)" step="0.1">
+                            </div>
+                            <div class="scenario-input-group">
+                                <label>표준편차 (%)</label>
+                                <input type="number" id="cogs-fixed-std" placeholder="표준편차 (%)" step="0.1">
+                            </div>
+                        </div>
+                        <div class="cost-scenario">
+                            <label>감가상각비</label>
+                            <div class="scenario-input-group">
+                                <label>평균 성장률 (%)</label>
+                                <input type="number" id="depreciation-fixed-mean" placeholder="평균 성장률 (%)" step="0.1">
+                            </div>
+                            <div class="scenario-input-group">
+                                <label>표준편차 (%)</label>
+                                <input type="number" id="depreciation-fixed-std" placeholder="표준편차 (%)" step="0.1">
+                            </div>
+                        </div>
+                        <div class="cost-scenario">
+                            <label>인건비 고정비</label>
+                            <div class="scenario-input-group">
+                                <label>평균 성장률 (%)</label>
+                                <input type="number" id="labor-fixed-mean" placeholder="평균 성장률 (%)" step="0.1">
+                            </div>
+                            <div class="scenario-input-group">
+                                <label>표준편차 (%)</label>
+                                <input type="number" id="labor-fixed-std" placeholder="표준편차 (%)" step="0.1">
+                            </div>
+                        </div>
+                        <div class="cost-scenario">
+                            <label>연구개발비 고정비</label>
+                            <div class="scenario-input-group">
+                                <label>평균 성장률 (%)</label>
+                                <input type="number" id="rd-fixed-mean" placeholder="평균 성장률 (%)" step="0.1">
+                            </div>
+                            <div class="scenario-input-group">
+                                <label>표준편차 (%)</label>
+                                <input type="number" id="rd-fixed-std" placeholder="표준편차 (%)" step="0.1">
+                            </div>
+                        </div>
+                        <div class="cost-scenario">
+                            <label>광고선전비 고정비</label>
+                            <div class="scenario-input-group">
+                                <label>평균 성장률 (%)</label>
+                                <input type="number" id="advertising-fixed-mean" placeholder="평균 성장률 (%)" step="0.1">
+                            </div>
+                            <div class="scenario-input-group">
+                                <label>표준편차 (%)</label>
+                                <input type="number" id="advertising-fixed-std" placeholder="표준편차 (%)" step="0.1">
+                            </div>
+                        </div>
+                        <div class="cost-scenario">
+                            <label>기타 비용 고정비</label>
+                            <div class="scenario-input-group">
+                                <label>평균 성장률 (%)</label>
+                                <input type="number" id="other-fixed-mean" placeholder="평균 성장률 (%)" step="0.1">
+                            </div>
+                            <div class="scenario-input-group">
+                                <label>표준편차 (%)</label>
+                                <input type="number" id="other-fixed-std" placeholder="표준편차 (%)" step="0.1">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+
+                <div class="form-actions">
+                    <button type="button" id="prevToPage1" class="btn-secondary">이전 단계로</button>
+                    <button type="button" id="nextToPage3" class="btn-primary">다음 단계로</button>
+                </div>
+            </div>
+
+            <!-- Page 3: 시뮬레이션 및 가치평가 -->
+            <div class="page" id="page3">
+                <h2>시뮬레이션 및 가치평가</h2>
+                <div class="simulation-controls">
+                    <div class="form-group">
+                        <label for="iterationCount">시뮬레이션 횟수</label>
+                        <input type="number" id="iterationCount" value="1500" min="100" max="10000" step="100">
+                    </div>
+                    <button type="button" id="startSimulation" class="btn-primary">시뮬레이션 시작</button>
+                    <button type="button" id="stopSimulation" class="btn-secondary" style="display: none;">중지</button>
+                </div>
+
+                <div class="progress-container" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill"></div>
+                    </div>
+                    <div class="progress-text">0%</div>
+                </div>
+
+                <div class="simulation-results" style="display: none;">
+                    <!-- 큰 분포도 차트 -->
+                    <div class="result-card large-chart">
+                        <h3>기업가치 분포</h3>
+                        <canvas id="valueDistributionChart"></canvas>
+                    </div>
+                    
+                    <!-- 통계 정보 -->
+                    <div class="result-card">
+                        <h3>핵심 통계 지표</h3>
+                        <div class="statistics">
+                            <div class="stat-item">
+                                <span class="stat-label">평균</span>
+                                <span class="stat-value" id="meanValue">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">중간값</span>
+                                <span class="stat-value" id="medianValue">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">표준편차</span>
+                                <span class="stat-value" id="stdDevValue">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">최소값</span>
+                                <span class="stat-value" id="minValue">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">최대값</span>
+                                <span class="stat-value" id="maxValue">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">25% 분위수</span>
+                                <span class="stat-value" id="percentile25">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">75% 분위수</span>
+                                <span class="stat-value" id="percentile75">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+
+                <div class="form-actions">
+                    <button type="button" id="prevToPage2" class="btn-secondary">이전 단계로</button>
+                    <button type="button" id="nextToPage4" class="btn-primary" disabled>다음 단계로</button>
+                </div>
+            </div>
+
+            <!-- Page 4: 투자 분석 -->
+            <div class="page" id="page4">
+                <h2>투자 분석</h2>
+
+                <div class="investment-results" style="display: none;">
+                    <!-- 큰 Upside/Downside 차트 -->
+                    <div class="result-card large-chart">
+                        <h3>Upside/Downside 분포</h3>
+                        <canvas id="upsideDownsideChart"></canvas>
+                    </div>
+                    
+                    <!-- 투자 분석 지표 -->
+                    <div class="result-card">
+                        <h3>투자 분석 지표</h3>
+                        <div class="investment-stats">
+                            <div class="stat-item">
+                                <span class="stat-label">Upside 확률</span>
+                                <span class="stat-value" id="upsideProbability">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Downside 확률</span>
+                                <span class="stat-value" id="downsideProbability">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">평균 기대 수익률</span>
+                                <span class="stat-value" id="expectedReturn">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">평균 기대 손실률</span>
+                                <span class="stat-value" id="expectedLoss">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+
+                <div class="form-actions">
+                    <button type="button" id="prevToPage3" class="btn-secondary">이전 단계로</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <script src="js/dataManager.js"></script>
+    <script src="js/simulation.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html> 
