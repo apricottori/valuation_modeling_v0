@@ -235,7 +235,12 @@ class ValueWebApp {
             const value = this.parseFormattedNumber(e.target.value);
             this.updateIncomeStatement('revenue', value);
             this.calculateGrossProfit();
-            this.calculateOtherSegmentRevenue();
+            
+            // 디바운싱을 위한 타이머 설정
+            clearTimeout(this.revenueUpdateTimer);
+            this.revenueUpdateTimer = setTimeout(() => {
+                this.calculateOtherSegmentRevenue();
+            }, 300);
         });
 
         document.getElementById('costOfGoodsSold').addEventListener('input', (e) => {
@@ -261,10 +266,11 @@ class ValueWebApp {
         // 사업부문 revenue 입력 이벤트
         document.addEventListener('input', (e) => {
             if (e.target.classList.contains('segment-revenue')) {
-                const value = this.parseFormattedNumber(e.target.value);
-                this.calculateOtherSegmentRevenue();
-                // 사업부문 데이터 업데이트
-                this.updateBusinessSegments();
+                // 디바운싱을 위한 타이머 설정
+                clearTimeout(this.revenueUpdateTimer);
+                this.revenueUpdateTimer = setTimeout(() => {
+                    this.updateBusinessSegments();
+                }, 300); // 300ms 지연
             }
             if (e.target.classList.contains('segment-name')) {
                 // 사업부문 데이터 업데이트
@@ -277,7 +283,6 @@ class ValueWebApp {
             if (e.target.classList.contains('btn-remove-segment')) {
                 setTimeout(() => {
                     this.updateBusinessSegments();
-                    this.calculateOtherSegmentRevenue();
                 }, 0);
             }
         });
@@ -437,6 +442,9 @@ class ValueWebApp {
 
         // 비용 구조
         this.populateCostStructure(costStructure);
+        
+        // 기타 매출액 계산 (데이터 로드 후)
+        this.calculateOtherSegmentRevenue();
 
         // 고정비 성장률
         const { fixedCostGrowth } = data.scenarioModel;
@@ -559,7 +567,6 @@ class ValueWebApp {
         
         // 새로 추가된 사업부문 데이터 업데이트
         this.updateBusinessSegments();
-        this.calculateOtherSegmentRevenue();
     }
 
     // 사업부문 데이터 업데이트
@@ -580,8 +587,16 @@ class ValueWebApp {
             currentData.financialStructure.businessSegments = segments;
             dataManager.saveData(currentData);
             
-            // 기타 사업부문 매출 자동 계산
+            // 기타 사업부문 매출 자동 계산 및 UI 업데이트
             this.calculateOtherSegmentRevenue();
+            
+            // 디버깅 로그
+            console.log('사업부문 업데이트:', {
+                segments: segments,
+                totalSegmentRevenue: segments.reduce((sum, seg) => sum + seg.revenue, 0),
+                totalRevenue: currentData.financialStructure.incomeStatement.revenue,
+                otherRevenue: dataManager.calculateOtherSegmentRevenue()
+            });
         }
     }
 
@@ -614,7 +629,38 @@ class ValueWebApp {
     // 기타 사업부문 매출 계산
     calculateOtherSegmentRevenue() {
         const otherRevenue = dataManager.calculateOtherSegmentRevenue();
-        document.getElementById('other-segment-revenue').value = this.formatNumber(otherRevenue);
+        const formattedRevenue = this.formatNumber(otherRevenue);
+        document.getElementById('other-segment-revenue').value = formattedRevenue;
+        
+        // 기타 매출액이 음수인 경우 경고 표시
+        const otherSegmentElement = document.querySelector('.other-segment');
+        if (otherRevenue < 0) {
+            if (!otherSegmentElement.querySelector('.warning-message')) {
+                const warningDiv = document.createElement('div');
+                warningDiv.className = 'warning-message';
+                warningDiv.style.cssText = `
+                    color: #e74c3c;
+                    font-size: 0.9rem;
+                    font-weight: 600;
+                    margin-top: 0.5rem;
+                    text-align: center;
+                    background: rgba(231, 76, 60, 0.1);
+                    padding: 0.5rem;
+                    border-radius: 4px;
+                    border: 1px solid rgba(231, 76, 60, 0.3);
+                `;
+                warningDiv.textContent = '⚠️ 사업부문 매출 합계가 총 매출을 초과했습니다.';
+                otherSegmentElement.appendChild(warningDiv);
+            }
+        } else {
+            // 경고 메시지 제거
+            const warningMessage = otherSegmentElement.querySelector('.warning-message');
+            if (warningMessage) {
+                warningMessage.remove();
+            }
+        }
+        
+        return otherRevenue;
     }
 
     // 기타 비용 계산
@@ -1205,6 +1251,10 @@ class ValueWebApp {
     displaySimulationResults(results) {
         const { statistics, histogram } = results;
         
+        // 현재 기업가치 가져오기
+        const data = dataManager.getData();
+        const currentMarketValue = data?.financialStructure?.companyInfo?.marketValue || 0;
+        
         // 통계 업데이트 (단위 변환 적용)
         document.getElementById('meanValue').textContent = this.formatCurrency(statistics.mean);
         document.getElementById('medianValue').textContent = this.formatCurrency(statistics.median);
@@ -1213,6 +1263,26 @@ class ValueWebApp {
         document.getElementById('maxValue').textContent = this.formatCurrency(statistics.max);
         document.getElementById('percentile25').textContent = this.formatCurrency(statistics.percentile25);
         document.getElementById('percentile75').textContent = this.formatCurrency(statistics.percentile75);
+
+        // 현재가치 표시
+        const currentValueElement = document.getElementById('currentValue');
+        if (currentValueElement) {
+            if (currentMarketValue > 0) {
+                currentValueElement.textContent = this.formatCurrency(currentMarketValue);
+                // 현재가치 요소에 특별한 스타일 클래스 추가
+                const currentValueItem = currentValueElement.closest('.current-value-item');
+                if (currentValueItem) {
+                    currentValueItem.style.display = 'flex';
+                }
+            } else {
+                currentValueElement.textContent = '미입력';
+                // 현재가치가 없으면 요소 숨기기
+                const currentValueItem = currentValueElement.closest('.current-value-item');
+                if (currentValueItem) {
+                    currentValueItem.style.display = 'none';
+                }
+            }
+        }
 
         // 결과 표시
         document.querySelector('.simulation-results').style.display = 'block';
@@ -1224,9 +1294,8 @@ class ValueWebApp {
         this.createValueDistributionChart(histogram);
         
         // 현재 기업가치가 있으면 투자 분석도 자동 실행
-        const marketValue = dataManager.getData().financialStructure.companyInfo.marketValue;
-        if (marketValue && marketValue > 0) {
-            this.updateInvestmentAnalysis(marketValue);
+        if (currentMarketValue && currentMarketValue > 0) {
+            this.updateInvestmentAnalysis(currentMarketValue);
         }
     }
 
@@ -1241,46 +1310,88 @@ class ValueWebApp {
         // 현재 기업가치 가져오기
         const data = dataManager.getData();
         const currentMarketValue = data?.financialStructure?.companyInfo?.marketValue || 0;
+        
+        console.log('현재가치 확인:', currentMarketValue);
 
-        // 라벨에 단위 변환 적용
-        const formattedLabels = histogramData.labels.map(label => {
-            const value = parseFloat(label);
-            return this.formatCurrency(value);
+        // 히스토그램 데이터 준비
+        const labels = histogramData.labels.map(label => {
+            // "10M" 형식에서 숫자만 추출
+            if (typeof label === 'string') {
+                return parseFloat(label.replace('M', ''));
+            }
+            return parseFloat(label);
         });
-
-        // 현재가치가 히스토그램 범위 내에 있는지 확인하고 해당 위치 찾기
-        let currentValueIndex = -1;
+        const dataValues = histogramData.data;
+        
+        // 현재가치가 히스토그램 범위에 포함되도록 데이터 확장
+        let extendedLabels = [...labels];
+        let extendedData = [...dataValues];
+        
         if (currentMarketValue > 0) {
-            const binWidth = parseFloat(histogramData.labels[1]) - parseFloat(histogramData.labels[0]);
-            const minValue = parseFloat(histogramData.labels[0]);
-            currentValueIndex = Math.floor((currentMarketValue - minValue) / binWidth);
+            const minValue = Math.min(...labels);
+            const maxValue = Math.max(...labels);
+            const binWidth = labels[1] - labels[0];
             
-            // 범위 내에 있는지 확인
-            if (currentValueIndex >= 0 && currentValueIndex < histogramData.data.length) {
-                // 현재가치가 정확히 해당 구간에 있는지 확인
-                const binStart = minValue + (currentValueIndex * binWidth);
-                const binEnd = binStart + binWidth;
-                if (currentMarketValue >= binStart && currentMarketValue < binEnd) {
-                    // 정확한 위치에 있음
-                } else {
-                    currentValueIndex = -1; // 범위 밖
+            // 현재가치가 범위 밖에 있는 경우 데이터 확장
+            if (currentMarketValue < minValue) {
+                // 현재가치가 최소값보다 작은 경우
+                const additionalBins = Math.ceil((minValue - currentMarketValue) / binWidth) + 2;
+                for (let i = additionalBins; i > 0; i--) {
+                    const newValue = currentMarketValue + (additionalBins - i) * binWidth;
+                    extendedLabels.unshift(newValue);
+                    extendedData.unshift(0);
                 }
-            } else {
-                currentValueIndex = -1; // 범위 밖
+            } else if (currentMarketValue > maxValue) {
+                // 현재가치가 최대값보다 큰 경우
+                const additionalBins = Math.ceil((currentMarketValue - maxValue) / binWidth) + 2;
+                for (let i = 1; i <= additionalBins; i++) {
+                    const newValue = maxValue + i * binWidth;
+                    extendedLabels.push(newValue);
+                    extendedData.push(0);
+                }
             }
         }
+        
+        // 라벨에 단위 변환 적용
+        const formattedLabels = extendedLabels.map(label => this.formatCurrency(label));
 
-        // 기업가치 분포 데이터셋
-        const datasets = [{
-            label: '기업가치 분포',
-            data: histogramData.data,
-            backgroundColor: 'rgba(102, 126, 234, 0.2)',
-            borderColor: 'rgba(102, 126, 234, 1)',
-            borderWidth: 3,
-            fill: true
-        }];
+        // 데이터셋 구성
+        const datasets = [
+            {
+                label: '기업가치 분포',
+                data: extendedData,
+                backgroundColor: 'rgba(102, 126, 234, 0.2)',
+                borderColor: 'rgba(102, 126, 234, 1)',
+                borderWidth: 3,
+                fill: true
+            }
+        ];
 
-
+        // annotation 설정 (현재가치가 있는 경우에만)
+        const annotations = {};
+        if (currentMarketValue > 0) {
+            annotations.currentValue = {
+                type: 'line',
+                xMin: currentMarketValue,
+                xMax: currentMarketValue,
+                borderColor: '#e74c3c',
+                borderWidth: 3,
+                borderDash: [5, 5],
+                label: {
+                    content: '현재가치: ' + this.formatCurrency(currentMarketValue),
+                    enabled: true,
+                    position: 'top',
+                    backgroundColor: '#e74c3c',
+                    color: 'white',
+                    font: {
+                        size: 12,
+                        weight: 'bold'
+                    },
+                    padding: 4,
+                    borderRadius: 4
+                }
+            };
+        }
 
         this.charts.valueDistribution = new Chart(ctx, {
             type: 'line',
@@ -1312,46 +1423,28 @@ class ValueWebApp {
                     },
                     tooltip: {
                         callbacks: {
+                            title: function(tooltipItems) {
+                                const dataIndex = tooltipItems[0].dataIndex;
+                                const value = extendedLabels[dataIndex];
+                                return '기업가치: ' + this.formatCurrency(value);
+                            }.bind(this),
                             label: function(context) {
-                                return context.dataset.label + ': ' + context.parsed.y;
+                                return '빈도: ' + context.parsed.y;
                             }
                         }
                     },
                     annotation: {
-                        annotations: currentMarketValue > 0 ? {
-                            currentValueLine: {
-                                type: 'line',
-                                xMin: currentValueIndex >= 0 ? currentValueIndex : null,
-                                xMax: currentValueIndex >= 0 ? currentValueIndex : null,
-                                borderColor: '#e74c3c',
-                                borderWidth: 3,
-                                borderDash: [6, 6],
-                                label: {
-                                    content: `현재가치: ${this.formatCurrency(currentMarketValue)}`,
-                                    enabled: true,
-                                    position: 'top',
-                                    backgroundColor: '#e74c3c',
-                                    color: 'white',
-                                    font: {
-                                        size: 12,
-                                        weight: 'bold'
-                                    },
-                                    padding: 6,
-                                    borderRadius: 4,
-                                    yAdjust: -10
-                                }
-                            }
-                        } : {}
+                        annotations: annotations
                     }
                 },
                 elements: {
                     line: {
-                        tension: 0.4, // 곡선 부드러움
+                        tension: 0.4,
                         borderWidth: 3
                     },
                     point: {
-                        radius: 0, // 포인트 숨김
-                        hoverRadius: 6 // 호버 시에만 포인트 표시
+                        radius: 0,
+                        hoverRadius: 6
                     }
                 },
                 interaction: {

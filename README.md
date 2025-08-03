@@ -1,121 +1,264 @@
-# Enterprise Value Web Application
+# Valuation Assistant - 기업가치평가 시뮬레이션 도구
 
-A comprehensive web application for enterprise valuation using Monte Carlo simulation with probabilistic scenario modeling.
+## 📋 프로젝트 개요
 
-## Features
+Valuation Assistant는 기업의 재무 구조를 분석하고 확률론적 시나리오 모델링을 통해 기업가치를 평가하는 웹 기반 도구입니다. DCF(Discounted Cash Flow) 방법론을 기반으로 하며, 몬테카를로 시뮬레이션을 통해 다양한 시나리오 하에서의 기업가치 분포를 분석합니다.
 
-### 📊 Financial Structure Analysis
-- Company information management
-- Business segment configuration
-- Cost structure analysis with variable/fixed cost ratios
-- AI-powered cost model validation
+## 🎯 주요 기능
 
-### 🎯 Probabilistic Scenario Modeling
-- Multiple growth models: CAGR, Growth (convergence), Logistic regression
-- Scenario probability management
-- Individual scenario visualization
-- AI-powered scenario review and SWOT analysis
-- Note-taking functionality for scenarios
+### 1. 재무 구조 분석 (Page 1)
 
-### 🔄 Monte Carlo Simulation
-- Advanced revenue forecasting
-- Cost structure simulation
-- Free Cash Flow calculation
-- Enterprise value distribution analysis
+#### 1.1 기업 정보 및 핵심 가정
+- **기업명**: 분석 대상 기업명 입력
+- **할인율**: DCF 계산에 사용되는 할인율 설정 (기본값: 10%)
+- **법인세율**: 기업의 법인세율 설정 (기본값: 25%)
+- **예측 기간**: 미래 현금흐름 예측 기간 설정 (기본값: 15년)
+- **영구 성장률**: 잔존가치 계산에 사용되는 영구 성장률 (기본값: 2.5%)
+- **현재 기업가치**: 투자 분석을 위한 현재 시장가치 입력
 
-### 📈 Investment Analysis
-- Value distribution charts
-- Upside/downside analysis
-- Investment decision support
+#### 1.2 AI 기업 분석
+- **Google AI Studio API 연동**: 기업명을 입력하여 AI가 해당 기업의 사업을 분석
+- **API 키 관리**: Google AI Studio에서 발급받은 API 키를 안전하게 저장
+- **실시간 분석 결과**: AI가 제공하는 기업 분석 내용을 즉시 확인
 
-## Technology Stack
+#### 1.3 손익계산서 (기준 연도)
+- **매출**: 기업의 총 매출액 입력
+- **매출원가**: 매출에 대응하는 원가 입력
+- **매출총이익**: 매출 - 매출원가로 자동 계산
+- **영업이익 (EBIT)**: 영업활동에서 발생하는 이익 입력
 
-- **Frontend**: HTML5, CSS3, JavaScript (ES6+)
-- **Charts**: Chart.js with Annotation Plugin
-- **AI Integration**: Google AI Studio API (Gemini)
-- **Data Storage**: LocalStorage
-- **Deployment**: Render (Static Site)
+#### 1.4 사업부문 설정
+- **동적 사업부문 관리**: 필요에 따라 사업부문을 추가/삭제
+- **사업부문별 매출 분할**: 전체 매출을 사업부문별로 분할 입력
+- **기타 사업부문 자동 계산**: 사용자 정의 사업부문 외의 매출을 자동으로 계산
 
-## Getting Started
+#### 1.5 비용 구조 분석
+- **비용 항목별 관리**:
+  - 매출원가 (기본 변동비 비중: 80%)
+  - 감가상각비 (기본 변동비 비중: 0%)
+  - 인건비 (기본 변동비 비중: 30%)
+  - 연구개발비 (기본 변동비 비중: 20%)
+  - 광고선전비 (기본 변동비 비중: 60%)
+  - 기타 비용 (자동 계산, 기본 변동비 비중: 40%)
 
-### Prerequisites
-- Modern web browser (Chrome, Firefox, Safari, Edge)
-- Google AI Studio API key (for AI features)
+- **변동비/고정비 비율 조정**: 슬라이더를 통해 각 비용의 변동비/고정비 비율을 직관적으로 조정
+- **실시간 비율 표시**: 변동비와 고정비 비율을 실시간으로 확인
 
-### Installation
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/value-web-app.git
-   cd value-web-app
-   ```
+#### 1.6 Cost Model Check
+- **AI 기반 비용 구조 검증**: 입력된 비용 구조의 타당성을 AI가 분석
+- **전문가 관점의 피드백**: 재무 전문가 입장에서 비용 구조의 적절성 검토
+- **개선 제안**: AI가 제안하는 적절한 고정비 비중 제공
 
-2. Open `index.html` in your web browser
+### 2. 확률론적 시나리오 모델링 (Page 2)
 
-3. For AI features, add your Google AI Studio API key in the financial structure section
+#### 2.1 사업부문별 시나리오 설정
+- **동적 시나리오 카드**: 사업부문별로 독립적인 시나리오 설정
+- **시나리오 추가/삭제**: 각 사업부문에 대해 여러 시나리오 생성 가능
+- **확률 기반 시나리오**: 각 시나리오의 발생 확률 설정 (총합 100% 검증)
 
-## Usage
+#### 2.2 성장 모델 지원
+- **CAGR 모델**: 복합연평균성장률 기반 성장 예측
+  - 평균 성장률 및 표준편차 설정
+- **Growth 모델**: 영구성장률로 수렴하는 성장 모델
+  - 초기 성장률 및 표준편차 설정
+- **Logistic 모델**: 로지스틱 성장 곡선 기반 예측
+  - TAM (Total Addressable Market) 설정
+  - 변곡점까지의 연도 설정
 
-### 1. Financial Structure Setup
-- Enter company information
-- Configure business segments
-- Set up cost structure with variable/fixed ratios
-- Use AI to validate cost models
+#### 2.3 시나리오 관리 기능
+- **시나리오 메모**: 각 시나리오에 대한 상세 메모 작성 (최대 500자)
+- **시나리오 시각화**: 개별 시나리오의 성장 곡선을 차트로 확인
+- **AI Review**: AI가 설정된 시나리오의 타당성을 검토하고 SWOT 분석 제공
 
-### 2. Scenario Modeling
-- Create scenarios for each business segment
-- Choose growth models (CAGR, Growth, Logistic)
-- Set probabilities and model-specific parameters
-- Add notes and get AI review
+#### 2.4 고정비 성장률 시나리오
+- **비용 항목별 고정비 성장률**: 각 비용의 고정비 부분에 대한 성장률 설정
+- **평균 및 표준편차**: 정규분포 기반의 확률적 성장률 모델링
+- **비용 항목**:
+  - 매출원가 고정비
+  - 감가상각비
+  - 인건비 고정비
+  - 연구개발비 고정비
+  - 광고선전비 고정비
+  - 기타 비용 고정비
 
-### 3. Simulation
-- Run Monte Carlo simulation
-- Analyze results and distributions
-- Export data for further analysis
+### 3. 시뮬레이션 및 가치평가 (Page 3)
 
-### 4. Investment Analysis
-- Review value distributions
-- Analyze upside/downside scenarios
-- Make informed investment decisions
+#### 3.1 몬테카를로 시뮬레이션
+- **시뮬레이션 횟수 설정**: 100~10,000회 범위에서 시뮬레이션 횟수 조정
+- **실시간 진행률 표시**: 시뮬레이션 진행 상황을 프로그레스 바로 확인
+- **배치 처리**: 효율적인 시뮬레이션을 위한 배치 단위 처리
 
-## Data Management
+#### 3.2 기업가치 분포 분석
+- **통계 지표**: 평균, 중간값, 표준편차, 최소값, 최대값, 25%/75% 분위수
+- **히스토그램 차트**: 기업가치 분포를 시각적으로 표현
+- **현재가치 비교**: 현재 기업가치와 시뮬레이션 결과 비교
 
-- **Export**: Save all data as JSON file
-- **Import**: Load previously saved data
-- **Local Storage**: Automatic data persistence
+#### 3.3 DCF 모델링
+- **매출 예측**: 사업부문별 시나리오 기반 매출 예측
+- **비용 예측**: 변동비/고정비 구조를 반영한 비용 예측
+- **FCF 계산**: Free Cash Flow 계산 및 예측
+- **기업가치 계산**: DCF 방법론을 통한 기업가치 산출
 
-## Growth Models
+### 4. 투자 분석 (Page 4)
 
-### CAGR (Compound Annual Growth Rate)
-- Simple compound growth model
-- Requires mean growth rate and standard deviation
+#### 4.1 Upside/Downside 분석
+- **Upside 확률**: 현재가치 대비 상승 확률 계산
+- **Downside 확률**: 현재가치 대비 하락 확률 계산
+- **기대 수익률**: Upside 상황에서의 평균 기대 수익률
+- **기대 손실률**: Downside 상황에서의 평균 기대 손실률
 
-### Growth (Convergence)
-- Growth rate converges to terminal growth rate over forecast period
-- Requires initial growth rate, standard deviation, and convergence period
+#### 4.2 투자 분석 차트
+- **Upside/Downside 분포 차트**: 현재가치 기준으로 상승/하락 구간을 색상으로 구분
+- **현재가치 기준선**: 차트에 현재 기업가치 위치 표시
 
-### Logistic Regression
-- S-curve growth model
-- Parameters: TAM (Total Addressable Market), inflection point, initial value
-- TAM grows annually by terminal growth rate
+## 🔧 기술 스택
 
-## Contributing
+### Frontend
+- **HTML5**: 웹 페이지 구조
+- **CSS3**: 반응형 디자인 및 모던 UI/UX
+- **JavaScript (ES6+)**: 클라이언트 사이드 로직
+- **Chart.js**: 데이터 시각화 및 차트 생성
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+### 외부 API
+- **Google AI Studio API**: 기업 분석 및 시나리오 검토
+- **Chart.js Plugin Annotation**: 차트 주석 기능
 
-## License
+### 데이터 관리
+- **LocalStorage**: 브라우저 기반 데이터 저장
+- **JSON**: 데이터 직렬화 및 파일 입출력
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## 📊 데이터 구조
 
-## Support
+### 재무 구조 데이터
+```javascript
+financialStructure: {
+  companyInfo: {
+    name: string,
+    discountRate: number,
+    taxRate: number,
+    forecastPeriod: number,
+    terminalGrowthRate: number,
+    marketValue: number,
+    apiKey: string
+  },
+  incomeStatement: {
+    revenue: number,
+    costOfGoodsSold: number,
+    grossProfit: number,
+    operatingIncome: number
+  },
+  businessSegments: Array<{name: string, revenue: number}>,
+  costStructure: {
+    [costType]: {
+      amount: number,
+      variableRatio: number,
+      fixedRatio: number
+    }
+  }
+}
+```
 
-For support and questions, please open an issue on GitHub.
+### 시나리오 모델 데이터
+```javascript
+scenarioModel: {
+  segmentScenarios: {
+    [segmentName]: Array<{
+      name: string,
+      probability: number,
+      growthModel: 'cagr' | 'growth' | 'logistic',
+      meanGrowthRate?: number,
+      stdDevGrowthRate?: number,
+      tam?: number,
+      inflectionPoint?: number,
+      note?: string
+    }>
+  },
+  fixedCostGrowth: {
+    [costType]: {
+      mean: number,
+      stdDev: number
+    }
+  }
+}
+```
 
-## Acknowledgments
+## 🚀 사용 방법
 
-- Chart.js for data visualization
-- Google AI Studio for AI integration
-- Render for hosting services 
+### 1. 초기 설정
+1. `index.html` 파일을 웹 브라우저에서 열기
+2. Google AI Studio에서 API 키 발급 (선택사항)
+3. 기업명 및 기본 정보 입력
+
+### 2. 재무 구조 분석
+1. 기업 정보 및 핵심 가정 입력
+2. 손익계산서 데이터 입력
+3. 사업부문 설정 및 매출 분할
+4. 비용 구조 분석 및 변동비/고정비 비율 조정
+5. AI 기업 분석 실행 (선택사항)
+6. Cost Model Check 실행 (선택사항)
+
+### 3. 시나리오 모델링
+1. 각 사업부문별 시나리오 추가
+2. 성장 모델 선택 및 매개변수 설정
+3. 시나리오 확률 설정 (총합 100% 확인)
+4. 고정비 성장률 시나리오 설정
+5. AI Review 실행 (선택사항)
+
+### 4. 시뮬레이션 실행
+1. 시뮬레이션 횟수 설정
+2. 시뮬레이션 시작
+3. 진행률 모니터링
+4. 결과 분석 및 통계 확인
+
+### 5. 투자 분석
+1. 현재 기업가치 입력 (Page 1에서 미리 입력 가능)
+2. Upside/Downside 분석 결과 확인
+3. 투자 위험/수익률 분석
+
+## 💾 데이터 관리
+
+### 데이터 내보내기
+- 헤더의 "데이터 내보내기" 버튼 클릭
+- JSON 형식으로 현재 분석 데이터 저장
+- 파일명: `{기업명}_{날짜}.json`
+
+### 데이터 가져오기
+- 헤더의 "데이터 가져오기" 버튼 클릭
+- 이전에 저장한 JSON 파일 선택
+- 기존 데이터를 새로운 데이터로 교체
+
+## 🎨 UI/UX 특징
+
+### 반응형 디자인
+- 데스크톱, 태블릿, 모바일 환경 지원
+- 화면 크기에 따른 자동 레이아웃 조정
+
+### 모던 인터페이스
+- 그라데이션 배경 및 카드 기반 레이아웃
+- 부드러운 애니메이션 및 전환 효과
+- 직관적인 슬라이더 및 버튼 디자인
+
+### 사용자 경험
+- 단계별 네비게이션
+- 실시간 데이터 검증 및 피드백
+- 진행률 표시 및 로딩 상태 관리
+
+## 🔒 보안 및 개인정보
+
+- **API 키**: 브라우저 LocalStorage에 암호화되지 않은 형태로 저장
+- **데이터 저장**: 모든 분석 데이터는 사용자의 로컬 브라우저에 저장
+- **외부 전송**: Google AI Studio API 호출 시에만 데이터가 외부로 전송
+
+## 📝 라이선스
+
+이 프로젝트는 교육 및 연구 목적으로 개발되었습니다.
+
+## 🤝 기여
+
+프로젝트 개선을 위한 제안이나 버그 리포트는 언제든 환영합니다.
+
+---
+
+**개발자**: Valuation Assistant Team  
+**버전**: v0.1  
+**최종 업데이트**: 2024년 

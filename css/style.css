@@ -418,6 +418,26 @@ body {
     font-size: 1.1rem;
 }
 
+.current-value-item {
+    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    color: white;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-top: 0.5rem;
+    box-shadow: 0 2px 8px rgba(231, 76, 60, 0.3);
+}
+
+.current-value-item .stat-label {
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 500;
+}
+
+.current-value-item .stat-value {
+    color: white;
+    font-weight: 700;
+    font-size: 1.2rem;
+}
+
 /* 버튼 스타일 */
 .form-actions {
     display: flex;
@@ -562,6 +582,8 @@ body {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
 .scenario-item-header h4 {
@@ -574,6 +596,7 @@ body {
     display: flex;
     gap: 0.5rem;
     align-items: center;
+    flex-wrap: wrap;
 }
 
 .btn-visualize-scenario {
@@ -587,6 +610,10 @@ body {
     font-weight: 600;
     transition: all 0.3s ease;
     box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    min-height: 44px; /* 모바일 터치 최적화 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .btn-visualize-scenario:hover {
@@ -607,6 +634,10 @@ body {
     font-weight: 600;
     transition: all 0.3s ease;
     box-shadow: 0 2px 8px rgba(52, 152, 219, 0.3);
+    min-height: 44px; /* 모바일 터치 최적화 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .btn-note-scenario:hover {
@@ -637,6 +668,10 @@ body {
     font-weight: 600;
     transition: all 0.3s ease;
     box-shadow: 0 2px 8px rgba(39, 174, 96, 0.3);
+    min-height: 48px; /* 모바일 터치 최적화 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .btn-ai-review:hover {
@@ -664,6 +699,31 @@ body {
     gap: 1rem;
     justify-content: center;
     margin-top: 1rem;
+    flex-wrap: wrap;
+}
+
+/* 시나리오 추가 버튼 스타일 */
+.add-scenario-btn {
+    padding: 0.75rem 1.5rem;
+    font-size: 0.9rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    min-height: 48px; /* 모바일 터치 최적화 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.add-scenario-btn:hover {
+    background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
 /* Note 모달 스타일 */
@@ -709,6 +769,10 @@ body {
     font-weight: 600;
     transition: all 0.3s ease;
     box-shadow: 0 2px 8px rgba(231, 76, 60, 0.3);
+    min-height: 44px; /* 모바일 터치 최적화 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .btn-remove-scenario:hover {
@@ -910,6 +974,51 @@ body {
     .logistic-inputs {
         grid-template-columns: 1fr;
     }
+
+    /* 시나리오 헤더 액션 버튼 모바일 최적화 */
+    .scenario-header-actions {
+        flex-direction: column;
+        gap: 0.5rem;
+        width: 100%;
+        margin-top: 0.75rem;
+    }
+
+    .scenario-header-actions button {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        font-size: 0.9rem;
+        justify-content: center;
+        text-align: center;
+    }
+
+    /* 세그먼트 액션 버튼 모바일 최적화 */
+    .segment-actions {
+        flex-direction: column;
+        gap: 0.75rem;
+        width: 100%;
+    }
+
+    .segment-actions button,
+    .segment-actions .add-scenario-btn {
+        width: 100%;
+        padding: 0.875rem 1.5rem;
+        font-size: 1rem;
+        justify-content: center;
+        text-align: center;
+    }
+
+    /* 시나리오 아이템 헤더 모바일 최적화 */
+    .scenario-item-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .scenario-item-header h4 {
+        margin: 0;
+        font-size: 1.1rem;
+        width: 100%;
+    }
 }
 
 @media (max-width: 480px) {
@@ -933,6 +1042,32 @@ body {
     
     .result-card {
         padding: 1.5rem;
+    }
+
+    /* 작은 모바일 화면에서 추가 최적화 */
+    .scenario-header-actions button {
+        padding: 0.875rem 1rem;
+        font-size: 0.95rem;
+    }
+
+    .segment-actions button,
+    .segment-actions .add-scenario-btn {
+        padding: 1rem 1.5rem;
+        font-size: 1.05rem;
+    }
+
+    .scenario-item-header h4 {
+        font-size: 1.2rem;
+    }
+
+    /* 버튼 간격 조정 */
+    .scenario-header-actions {
+        gap: 0.75rem;
+        margin-top: 1rem;
+    }
+
+    .segment-actions {
+        gap: 1rem;
     }
 }
 

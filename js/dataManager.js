@@ -291,10 +291,28 @@ class DataManager {
     calculateTotalSegmentRevenue() {
         const currentData = this.getData();
         if (currentData && currentData.financialStructure.businessSegments) {
-            return currentData.financialStructure.businessSegments.reduce((total, segment) => {
-                const revenue = parseFloat(segment.revenue.toString().replace(/,/g, '')) || 0;
+            const total = currentData.financialStructure.businessSegments.reduce((total, segment) => {
+                let revenue = 0;
+                
+                // revenue가 숫자인 경우
+                if (typeof segment.revenue === 'number') {
+                    revenue = segment.revenue;
+                }
+                // revenue가 문자열인 경우 (콤마 포함)
+                else if (typeof segment.revenue === 'string') {
+                    revenue = parseFloat(segment.revenue.replace(/,/g, '')) || 0;
+                }
+                
                 return total + revenue;
             }, 0);
+            
+            // 디버깅 로그
+            console.log('사업부문 매출 합계 계산:', {
+                segments: currentData.financialStructure.businessSegments,
+                total: total
+            });
+            
+            return total;
         }
         return 0;
     }
@@ -322,6 +340,14 @@ class DataManager {
             const totalRevenue = parseFloat(currentData.financialStructure.incomeStatement.revenue) || 0;
             const userSegmentRevenue = this.calculateTotalSegmentRevenue();
             const otherRevenue = Math.max(0, totalRevenue - userSegmentRevenue);
+            
+            // 디버깅 로그
+            console.log('기타 매출 계산:', {
+                totalRevenue: totalRevenue,
+                userSegmentRevenue: userSegmentRevenue,
+                otherRevenue: otherRevenue,
+                segments: currentData.financialStructure.businessSegments
+            });
             
             return otherRevenue;
         }
