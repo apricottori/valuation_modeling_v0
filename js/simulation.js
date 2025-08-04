@@ -363,7 +363,14 @@ class SimulationEngine {
         
         for (let i = 0; i < bins; i++) {
             const binStart = min + i * binWidth;
-            binLabels.push(`${binStart.toFixed(0)}M`);
+            // Million 기준으로 단위 변환
+            if (binStart >= 1e6) {
+                binLabels.push(`${(binStart / 1e6).toFixed(1)}T`);
+            } else if (binStart >= 1e3) {
+                binLabels.push(`${(binStart / 1e3).toFixed(1)}B`);
+            } else {
+                binLabels.push(`${binStart.toFixed(0)}M`);
+            }
         }
         
         for (const value of validValues) {

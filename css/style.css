@@ -89,6 +89,31 @@ body {
     flex-wrap: wrap;
 }
 
+/* 페이지 헤더 */
+.page-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.page-header h2 {
+    margin: 0;
+    flex: 1;
+    text-align: center;
+}
+
+/* 단위 표시 (조용한 스타일) */
+.unit-subtitle {
+    color: #888;
+    font-size: 0.85rem;
+    font-weight: 400;
+    margin-bottom: 0.3rem;
+    text-align: right;
+    flex-shrink: 0;
+}
+
 /* 메인 컨텐츠 */
 .main-content {
     min-height: calc(100vh - 200px);
@@ -900,6 +925,17 @@ body {
         font-weight: 700;
     }
     
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    
+    .unit-subtitle {
+        font-size: 0.8rem;
+        margin-bottom: 0.2rem;
+    }
+    
     .nav-steps {
         flex-direction: column;
         align-items: center;
@@ -1617,5 +1653,228 @@ canvas {
     
     .chart-wrapper {
         height: 250px;
+    }
+}
+
+/* 저장 완료 팝업 스타일 */
+.save-success-popup {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    animation: slideInRight 0.3s ease-out;
+}
+
+.save-success-content {
+    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(76, 175, 80, 0.3);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 280px;
+}
+
+.save-success-icon {
+    font-size: 1.5rem;
+    animation: bounce 0.6s ease-in-out;
+}
+
+.save-success-text {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes bounce {
+    0%, 20%, 50%, 80%, 100% {
+        transform: translateY(0);
+    }
+    40% {
+        transform: translateY(-10px);
+    }
+    60% {
+        transform: translateY(-5px);
+    }
+}
+
+@media (max-width: 768px) {
+    .save-success-popup {
+        top: 10px;
+        right: 10px;
+        left: 10px;
+    }
+    
+    .save-success-content {
+        min-width: auto;
+        padding: 0.75rem 1rem;
+    }
+    
+    .save-success-text {
+        font-size: 0.9rem;
+    }
+} 
+
+/* 모델 시각화 스타일 */
+.scenario-selection-section {
+    background: white;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    margin-bottom: 2rem;
+}
+
+/* 사업부문 추가 버튼 간격 조정 */
+#addSegment {
+    margin-bottom: 2rem !important;
+}
+
+.scenario-selection-section h3 {
+    margin-bottom: 1.5rem;
+    color: #333;
+    font-size: 1.3rem;
+    font-weight: 600;
+}
+
+.scenario-selectors {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.scenario-selectors .form-group {
+    margin-bottom: 0;
+}
+
+.scenario-selectors select {
+    width: 100%;
+    padding: 0.75rem;
+    border: 2px solid #e1e5e9;
+    border-radius: 8px;
+    font-size: 1rem;
+    background: white;
+    transition: all 0.3s ease;
+}
+
+.scenario-selectors select:hover {
+    border-color: #667eea;
+}
+
+.scenario-selectors select:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.annual-charts-section {
+    background: white;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    margin-bottom: 2rem;
+}
+
+.annual-charts-section h3 {
+    margin-bottom: 1.5rem;
+    color: #333;
+    font-size: 1.3rem;
+    font-weight: 600;
+}
+
+.chart-container {
+    position: relative;
+    height: 500px;
+    margin-bottom: 1rem;
+}
+
+.summary-table-section {
+    background: white;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    margin-bottom: 2rem;
+}
+
+.summary-table-section h3 {
+    margin-bottom: 1.5rem;
+    color: #333;
+    font-size: 1.3rem;
+    font-weight: 600;
+}
+
+.table-container {
+    overflow-x: auto;
+}
+
+.summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+}
+
+.summary-table th,
+.summary-table td {
+    padding: 1rem;
+    text-align: right;
+    border-bottom: 1px solid #e1e5e9;
+}
+
+.summary-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+    color: #333;
+    text-align: center;
+}
+
+.summary-table th:first-child,
+.summary-table td:first-child {
+    text-align: left;
+    font-weight: 600;
+}
+
+.summary-table tbody tr:hover {
+    background: #f8f9fa;
+}
+
+.terminal-value-row {
+    background: #e8f4fd;
+    font-weight: 600;
+}
+
+.terminal-value-row td {
+    border-top: 2px solid #667eea;
+}
+
+/* 모바일 반응형 */
+@media (max-width: 768px) {
+    .scenario-selectors {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .chart-container {
+        height: 400px;
+    }
+    
+    .summary-table {
+        font-size: 0.85rem;
+    }
+    
+    .summary-table th,
+    .summary-table td {
+        padding: 0.75rem 0.5rem;
     }
 } 

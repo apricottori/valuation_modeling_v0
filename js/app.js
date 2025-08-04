@@ -28,14 +28,13 @@ class ValueWebApp {
     formatCurrency(num) {
         if (num === null || num === undefined || isNaN(num)) return '0';
         
-        if (num >= 1e12) {
-            return (num / 1e12).toFixed(2) + 'T';
-        } else if (num >= 1e9) {
-            return (num / 1e9).toFixed(2) + 'B';
-        } else if (num >= 1e6) {
-            return (num / 1e6).toFixed(2) + 'M';
+        // Million 기준으로 단위 변환 (입력값이 이미 Million 단위)
+        if (num >= 1e6) {
+            return (num / 1e6).toFixed(2) + 'T';  // Million 기준으로 Trillion
+        } else if (num >= 1e3) {
+            return (num / 1e3).toFixed(2) + 'B';  // Million 기준으로 Billion
         } else {
-            return this.formatNumber(Math.round(num));
+            return this.formatNumber(Math.round(num)) + 'M';  // Million
         }
     }
 
@@ -200,6 +199,9 @@ class ValueWebApp {
         
         // Page 4 이벤트
         this.setupPage4Events();
+        
+        // Page 5 이벤트
+        this.setupPage5Events();
     }
 
     // Page 1 이벤트 설정
@@ -342,15 +344,11 @@ class ValueWebApp {
 
     }
 
-    // Page 3 이벤트 설정
+    // Page 3 이벤트 설정 (모델 시각화)
     setupPage3Events() {
-        // 시뮬레이션 컨트롤
-        document.getElementById('startSimulation').addEventListener('click', () => {
-            this.startSimulation();
-        });
-
-        document.getElementById('stopSimulation').addEventListener('click', () => {
-            this.stopSimulation();
+        // 모델 시각화 업데이트 버튼
+        document.getElementById('updateVisualization').addEventListener('click', () => {
+            this.updateModelVisualization();
         });
 
         // 네비게이션
@@ -361,15 +359,34 @@ class ValueWebApp {
         document.getElementById('nextToPage4').addEventListener('click', () => {
             this.navigateToPage(4);
         });
-
-
     }
 
-    // Page 4 이벤트 설정
+    // Page 4 이벤트 설정 (시뮬레이션)
     setupPage4Events() {
+        // 시뮬레이션 컨트롤
+        document.getElementById('startSimulation').addEventListener('click', () => {
+            this.startSimulation();
+        });
+
+        document.getElementById('stopSimulation').addEventListener('click', () => {
+            this.stopSimulation();
+        });
+
         // 네비게이션
         document.getElementById('prevToPage3').addEventListener('click', () => {
             this.navigateToPage(3);
+        });
+
+        document.getElementById('nextToPage5').addEventListener('click', () => {
+            this.navigateToPage(5);
+        });
+    }
+
+    // Page 5 이벤트 설정 (투자 분석)
+    setupPage5Events() {
+        // 네비게이션
+        document.getElementById('prevToPage4').addEventListener('click', () => {
+            this.navigateToPage(4);
         });
     }
 
@@ -708,8 +725,10 @@ class ValueWebApp {
         // 페이지별 특별 처리
         if (pageNumber === 2) {
             this.setupPage2Scenarios();
-        } else if (pageNumber === 4) {
-            this.setupPage4Analysis();
+        } else if (pageNumber === 3) {
+            this.updateModelVisualization();
+        } else if (pageNumber === 5) {
+            this.setupPage5Analysis();
         }
     }
 
@@ -955,8 +974,8 @@ class ValueWebApp {
                 <div class="scenario-item-header">
                     <h4>${scenario.name || '시나리오'}</h4>
                     <div class="scenario-header-actions">
-                        <button type="button" class="btn-note-scenario ${scenario.note ? 'has-note' : ''}">
-                            ${scenario.note ? '📝 Note ✓' : '📝 Note'}
+                        <button type="button" class="btn-note-scenario ${scenario.note && scenario.note.trim() ? 'has-note' : ''}">
+                            ${scenario.note && scenario.note.trim() ? '📝 Note ✓' : '📝 Note'}
                         </button>
                         <button type="button" class="btn-primary btn-visualize-scenario">
                             📊 시각화
@@ -1315,9 +1334,16 @@ class ValueWebApp {
 
         // 히스토그램 데이터 준비
         const labels = histogramData.labels.map(label => {
-            // "10M" 형식에서 숫자만 추출
+            // Million 기준으로 라벨 파싱
             if (typeof label === 'string') {
-                return parseFloat(label.replace('M', ''));
+                if (label.includes('T')) {
+                    return parseFloat(label.replace('T', '')) * 1e6; // Trillion -> Million
+                } else if (label.includes('B')) {
+                    return parseFloat(label.replace('B', '')) * 1e3; // Billion -> Million
+                } else if (label.includes('M')) {
+                    return parseFloat(label.replace('M', '')); // Million
+                }
+                return parseFloat(label);
             }
             return parseFloat(label);
         });
@@ -1370,10 +1396,28 @@ class ValueWebApp {
         // annotation 설정 (현재가치가 있는 경우에만)
         const annotations = {};
         if (currentMarketValue > 0) {
+            // 현재가치가 확장된 라벨 배열에서 어느 위치에 있는지 찾기
+            let currentValueIndex = -1;
+            for (let i = 0; i < extendedLabels.length; i++) {
+                if (extendedLabels[i] >= currentMarketValue) {
+                    currentValueIndex = i;
+                    break;
+                }
+            }
+            
+            // 현재가치가 범위 밖에 있는 경우 처리
+            if (currentValueIndex === -1) {
+                if (currentMarketValue < Math.min(...extendedLabels)) {
+                    currentValueIndex = 0;
+                } else {
+                    currentValueIndex = extendedLabels.length - 1;
+                }
+            }
+            
             annotations.currentValue = {
                 type: 'line',
-                xMin: currentMarketValue,
-                xMax: currentMarketValue,
+                xMin: currentValueIndex,
+                xMax: currentValueIndex,
                 borderColor: '#e74c3c',
                 borderWidth: 3,
                 borderDash: [5, 5],
@@ -1456,7 +1500,7 @@ class ValueWebApp {
     }
 
     // Page 4 분석 설정
-    setupPage4Analysis() {
+    setupPage5Analysis() {
         const data = dataManager.getData();
         if (data && data.simulationResults.values) {
             // 저장된 기업가치가 있으면 자동으로 분석 실행
@@ -1502,19 +1546,62 @@ class ValueWebApp {
             return;
         }
 
-        const analysis = simulationEngine.analyzeUpsideDownside(data.simulationResults.values, valueToUse);
+        // 새로운 투자 분석 지표 계산
+        const analysis = this.calculateNewInvestmentMetrics(data.simulationResults.values, valueToUse, data.financialStructure.companyInfo.terminalGrowthRate);
         
         // 통계 업데이트
-        document.getElementById('upsideProbability').textContent = `${analysis.upsideProbability.toFixed(1)}%`;
-        document.getElementById('downsideProbability').textContent = `${analysis.downsideProbability.toFixed(1)}%`;
-        document.getElementById('expectedReturn').textContent = `${analysis.expectedReturn.toFixed(1)}%`;
-        document.getElementById('expectedLoss').textContent = `${analysis.expectedLoss.toFixed(1)}%`;
+        document.getElementById('expectedReturn').textContent = `${analysis.expectedReturn.toFixed(2)}%`;
+        document.getElementById('profitLossRatio').textContent = `${analysis.profitLossRatio.toFixed(2)}`;
+        document.getElementById('sharpeRatio').textContent = `${analysis.sharpeRatio.toFixed(2)}`;
 
         // Upside/Downside 차트 생성
         this.createUpsideDownsideChart(data.simulationResults.values, valueToUse);
 
         // 결과 표시
         document.querySelector('.investment-results').style.display = 'block';
+    }
+
+    // 새로운 투자 분석 지표 계산
+    calculateNewInvestmentMetrics(values, marketValue, riskFreeRate) {
+        // 1. 기대 수익률 (전체 분포의 기댓값)
+        const totalReturn = values.reduce((sum, value) => {
+            return sum + ((value - marketValue) / marketValue) * 100;
+        }, 0);
+        const expectedReturn = totalReturn / values.length;
+
+        // 2. 손익비 계산
+        const upsideValues = values.filter(value => value > marketValue);
+        const downsideValues = values.filter(value => value <= marketValue);
+        
+        let upsideExpectedReturn = 0;
+        let downsideExpectedLoss = 0;
+        
+        if (upsideValues.length > 0) {
+            const upsideReturns = upsideValues.map(value => ((value - marketValue) / marketValue) * 100);
+            upsideExpectedReturn = upsideReturns.reduce((sum, ret) => sum + ret, 0) / upsideReturns.length;
+        }
+        
+        if (downsideValues.length > 0) {
+            const downsideReturns = downsideValues.map(value => ((value - marketValue) / marketValue) * 100);
+            downsideExpectedLoss = Math.abs(downsideReturns.reduce((sum, ret) => sum + ret, 0) / downsideReturns.length);
+        }
+        
+        const profitLossRatio = downsideExpectedLoss > 0 ? upsideExpectedReturn / downsideExpectedLoss : 0;
+
+        // 3. 샤프 비율 계산
+        const returns = values.map(value => ((value - marketValue) / marketValue) * 100);
+        const meanReturn = returns.reduce((sum, ret) => sum + ret, 0) / returns.length;
+        const variance = returns.reduce((sum, ret) => sum + Math.pow(ret - meanReturn, 2), 0) / returns.length;
+        const standardDeviation = Math.sqrt(variance);
+        
+        const riskFreeRatePercent = riskFreeRate || 2.5; // 기본값 2.5%
+        const sharpeRatio = standardDeviation > 0 ? (meanReturn - riskFreeRatePercent) / standardDeviation : 0;
+
+        return {
+            expectedReturn,
+            profitLossRatio,
+            sharpeRatio
+        };
     }
 
     // Upside/Downside 차트 생성
@@ -1533,8 +1620,41 @@ class ValueWebApp {
         const downsideData = [];
         
         for (let i = 0; i < histogram.data.length; i++) {
-            const binStart = parseFloat(histogram.labels[i]);
-            const binEnd = i < histogram.data.length - 1 ? parseFloat(histogram.labels[i + 1]) : binStart + (binStart - parseFloat(histogram.labels[i - 1]));
+            // Million 기준으로 라벨 파싱
+            let binStart = 0;
+            if (typeof histogram.labels[i] === 'string') {
+                if (histogram.labels[i].includes('T')) {
+                    binStart = parseFloat(histogram.labels[i].replace('T', '')) * 1e6; // Trillion -> Million
+                } else if (histogram.labels[i].includes('B')) {
+                    binStart = parseFloat(histogram.labels[i].replace('B', '')) * 1e3; // Billion -> Million
+                } else if (histogram.labels[i].includes('M')) {
+                    binStart = parseFloat(histogram.labels[i].replace('M', '')); // Million
+                } else {
+                    binStart = parseFloat(histogram.labels[i]);
+                }
+            } else {
+                binStart = parseFloat(histogram.labels[i]);
+            }
+            
+            let binEnd = 0;
+            if (i < histogram.data.length - 1) {
+                if (typeof histogram.labels[i + 1] === 'string') {
+                    if (histogram.labels[i + 1].includes('T')) {
+                        binEnd = parseFloat(histogram.labels[i + 1].replace('T', '')) * 1e6;
+                    } else if (histogram.labels[i + 1].includes('B')) {
+                        binEnd = parseFloat(histogram.labels[i + 1].replace('B', '')) * 1e3;
+                    } else if (histogram.labels[i + 1].includes('M')) {
+                        binEnd = parseFloat(histogram.labels[i + 1].replace('M', ''));
+                    } else {
+                        binEnd = parseFloat(histogram.labels[i + 1]);
+                    }
+                } else {
+                    binEnd = parseFloat(histogram.labels[i + 1]);
+                }
+            } else {
+                binEnd = binStart + (binStart - (i > 0 ? parseFloat(histogram.labels[i - 1]) : 0));
+            }
+            
             const binCenter = (binStart + binEnd) / 2;
             
             if (binCenter > marketValue) {
@@ -1627,8 +1747,37 @@ class ValueWebApp {
     // 현재가치가 속한 구간 인덱스 찾기
     findBinIndex(labels, value) {
         for (let i = 0; i < labels.length - 1; i++) {
-            const binStart = parseFloat(labels[i]);
-            const binEnd = parseFloat(labels[i + 1]);
+            // Million 기준으로 라벨 파싱
+            let binStart = 0;
+            if (typeof labels[i] === 'string') {
+                if (labels[i].includes('T')) {
+                    binStart = parseFloat(labels[i].replace('T', '')) * 1e6; // Trillion -> Million
+                } else if (labels[i].includes('B')) {
+                    binStart = parseFloat(labels[i].replace('B', '')) * 1e3; // Billion -> Million
+                } else if (labels[i].includes('M')) {
+                    binStart = parseFloat(labels[i].replace('M', '')); // Million
+                } else {
+                    binStart = parseFloat(labels[i]);
+                }
+            } else {
+                binStart = parseFloat(labels[i]);
+            }
+            
+            let binEnd = 0;
+            if (typeof labels[i + 1] === 'string') {
+                if (labels[i + 1].includes('T')) {
+                    binEnd = parseFloat(labels[i + 1].replace('T', '')) * 1e6;
+                } else if (labels[i + 1].includes('B')) {
+                    binEnd = parseFloat(labels[i + 1].replace('B', '')) * 1e3;
+                } else if (labels[i + 1].includes('M')) {
+                    binEnd = parseFloat(labels[i + 1].replace('M', ''));
+                } else {
+                    binEnd = parseFloat(labels[i + 1]);
+                }
+            } else {
+                binEnd = parseFloat(labels[i + 1]);
+            }
+            
             if (value >= binStart && value < binEnd) {
                 return i;
             }
@@ -2377,9 +2526,16 @@ class ValueWebApp {
     showNoteModal(segmentName, scenarioDiv) {
         const scenarioIndex = Array.from(scenarioDiv.parentNode.children).indexOf(scenarioDiv);
         const data = dataManager.getData();
-        const scenarios = data.scenarioModel.segmentScenarios[segmentName] || [];
+        const scenarios = data?.scenarioModel?.segmentScenarios?.[segmentName] || [];
         const scenario = scenarios[scenarioIndex] || {};
         const currentNote = scenario.note || '';
+        
+        console.log('노트 모달 열기:', {
+            segmentName,
+            scenarioIndex,
+            scenario,
+            currentNote
+        });
 
         const modalHTML = `
             <div class="modal-overlay" id="noteModal">
@@ -2398,7 +2554,7 @@ class ValueWebApp {
                         </div>
                         <div class="form-actions">
                             <button type="button" class="btn-secondary" onclick="this.closest('.modal-overlay').remove()">취소</button>
-                            <button type="button" class="btn-primary" onclick="app.saveScenarioNote('${segmentName}', ${scenarioIndex})">저장</button>
+                            <button type="button" class="btn-primary" id="saveNoteBtn">저장</button>
                         </div>
                     </div>
                 </div>
@@ -2406,6 +2562,12 @@ class ValueWebApp {
         `;
         
         document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // 저장 버튼 이벤트 리스너 추가
+        const saveBtn = document.getElementById('saveNoteBtn');
+        saveBtn.addEventListener('click', () => {
+            this.saveScenarioNote(segmentName, scenarioIndex);
+        });
         
         // 글자 수 카운터
         const textarea = document.getElementById('scenarioNote');
@@ -2436,29 +2598,83 @@ class ValueWebApp {
         const noteText = document.getElementById('scenarioNote').value.trim();
         const data = dataManager.getData();
         
+        console.log('노트 저장 시작:', {
+            segmentName,
+            scenarioIndex,
+            noteText,
+            dataExists: !!data
+        });
+        
         if (!data.scenarioModel.segmentScenarios[segmentName]) {
             data.scenarioModel.segmentScenarios[segmentName] = [];
         }
         
-        if (!data.scenarioModel.segmentScenarios[segmentName][scenarioIndex]) {
-            data.scenarioModel.segmentScenarios[segmentName][scenarioIndex] = {};
+        // 시나리오 배열이 충분히 크지 않으면 확장
+        while (data.scenarioModel.segmentScenarios[segmentName].length <= scenarioIndex) {
+            data.scenarioModel.segmentScenarios[segmentName].push({});
         }
         
+        // 노트 저장
         data.scenarioModel.segmentScenarios[segmentName][scenarioIndex].note = noteText;
         dataManager.saveData(data);
+        
+        console.log('노트 저장 완료:', {
+            segmentName,
+            scenarioIndex,
+            savedNote: data.scenarioModel.segmentScenarios[segmentName][scenarioIndex].note
+        });
         
         // 모달 닫기
         document.getElementById('noteModal').remove();
         
         // Note 버튼 스타일 업데이트
         this.updateNoteButtonStyle(segmentName, scenarioIndex, noteText);
+        
+        // 저장 완료 팝업 표시
+        this.showSaveSuccessPopup();
+    }
+    
+    // 저장 완료 팝업 표시
+    showSaveSuccessPopup() {
+        const popupHTML = `
+            <div class="save-success-popup" id="saveSuccessPopup">
+                <div class="save-success-content">
+                    <div class="save-success-icon">✅</div>
+                    <div class="save-success-text">메모가 성공적으로 저장되었습니다!</div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', popupHTML);
+        
+        // 2초 후 자동으로 팝업 제거
+        setTimeout(() => {
+            const popup = document.getElementById('saveSuccessPopup');
+            if (popup) {
+                popup.remove();
+            }
+        }, 2000);
     }
 
     // Note 버튼 스타일 업데이트
     updateNoteButtonStyle(segmentName, scenarioIndex, noteText) {
         const container = document.getElementById(`scenarios-${segmentName}`);
+        if (!container) {
+            console.warn(`Container for segment ${segmentName} not found`);
+            return;
+        }
+        
         const scenarioDiv = container.children[scenarioIndex];
+        if (!scenarioDiv) {
+            console.warn(`Scenario div at index ${scenarioIndex} not found`);
+            return;
+        }
+        
         const noteButton = scenarioDiv.querySelector('.btn-note-scenario');
+        if (!noteButton) {
+            console.warn(`Note button not found in scenario div`);
+            return;
+        }
         
         if (noteText && noteText.trim()) {
             noteButton.classList.add('has-note');
@@ -2692,6 +2908,337 @@ class ValueWebApp {
                 e.target.remove();
             }
         });
+    }
+
+    // Page 5 이벤트 설정 (투자 분석)
+    setupPage5Events() {
+        // 네비게이션
+        document.getElementById('prevToPage4').addEventListener('click', () => {
+            this.navigateToPage(4);
+        });
+    }
+
+    // 모델 시각화 업데이트
+    updateModelVisualization() {
+        const data = dataManager.getData();
+        if (!data || !data.financialStructure) {
+            console.warn('데이터가 없습니다.');
+            return;
+        }
+
+        const { businessSegments, costStructure, companyInfo } = data.financialStructure;
+        const forecastPeriod = companyInfo.forecastPeriod || 15;
+        const discountRate = companyInfo.discountRate || 10;
+        const terminalGrowthRate = companyInfo.terminalGrowthRate || 2.5;
+
+        // 시나리오 선택기 동적 생성
+        this.populateScenarioSelectors(businessSegments);
+
+        // 선택된 시나리오 가져오기
+        const selectedScenarios = this.getSelectedScenarios();
+        
+        // 연도별 데이터 생성
+        const annualData = this.generateAnnualData(businessSegments, costStructure, selectedScenarios, forecastPeriod);
+        
+        // 차트 생성
+        this.createAnnualCharts(annualData);
+        
+        // 요약 테이블 생성
+        this.createFinancialSummaryTable(annualData, discountRate, terminalGrowthRate);
+    }
+
+    // 선택된 시나리오 가져오기
+    getSelectedScenarios() {
+        const scenarios = {};
+        const data = dataManager.getData();
+        if (!data || !data.financialStructure) return scenarios;
+        
+        const businessSegments = data.financialStructure.businessSegments;
+        
+        // 사업부문별 시나리오
+        businessSegments.forEach((segment, index) => {
+            const selectorId = `segment${index + 1}Scenario`;
+            const select = document.getElementById(selectorId);
+            if (select) {
+                scenarios[segment.name] = select.value;
+            }
+        });
+        
+        // 기타 사업부문 시나리오 추가
+        const otherSegmentRevenue = parseFloat(document.getElementById('other-segment-revenue').value) || 0;
+        if (otherSegmentRevenue > 0) {
+            const otherSelectorId = `segment${businessSegments.length + 1}Scenario`;
+            const otherSelect = document.getElementById(otherSelectorId);
+            if (otherSelect) {
+                scenarios['기타 (Other)'] = otherSelect.value;
+            }
+        }
+        
+        return scenarios;
+    }
+
+    // 시나리오 선택기 동적 생성
+    populateScenarioSelectors(businessSegments) {
+        const container = document.querySelector('.scenario-selectors');
+        if (!container) return;
+
+        // 기존 선택기들 제거
+        container.innerHTML = '';
+
+        // 각 사업부문에 대한 선택기 생성
+        businessSegments.forEach((segment, index) => {
+            const formGroup = document.createElement('div');
+            formGroup.className = 'form-group';
+            
+            formGroup.innerHTML = `
+                <label for="segment${index + 1}Scenario">${segment.name} 시나리오</label>
+                <select id="segment${index + 1}Scenario">
+                    <option value="optimistic">낙관적</option>
+                    <option value="base" selected>기본</option>
+                    <option value="pessimistic">비관적</option>
+                </select>
+            `;
+            
+            container.appendChild(formGroup);
+        });
+
+        // 기타 사업부문 시나리오 선택기 추가
+        const otherSegmentRevenue = parseFloat(document.getElementById('other-segment-revenue').value) || 0;
+        if (otherSegmentRevenue > 0) {
+            const otherFormGroup = document.createElement('div');
+            otherFormGroup.className = 'form-group';
+            
+            otherFormGroup.innerHTML = `
+                <label for="segment${businessSegments.length + 1}Scenario">기타 (Other) 시나리오</label>
+                <select id="segment${businessSegments.length + 1}Scenario">
+                    <option value="optimistic">낙관적</option>
+                    <option value="base" selected>기본</option>
+                    <option value="pessimistic">비관적</option>
+                </select>
+            `;
+            
+            container.appendChild(otherFormGroup);
+        }
+    }
+
+    // 연도별 데이터 생성
+    generateAnnualData(businessSegments, costStructure, selectedScenarios, forecastPeriod) {
+        const annualData = [];
+        
+        // 기타 사업부문 매출 추가
+        const otherSegmentRevenue = parseFloat(document.getElementById('other-segment-revenue').value) || 0;
+        const allSegments = [...businessSegments];
+        if (otherSegmentRevenue > 0) {
+            allSegments.push({ name: '기타 (Other)', revenue: otherSegmentRevenue });
+        }
+        
+        const baseRevenue = allSegments.reduce((total, segment) => total + (segment.revenue || 0), 0);
+        
+        for (let year = 1; year <= forecastPeriod; year++) {
+            const yearData = {
+                year: year,
+                revenue: 0,
+                segmentRevenues: {}, // 각 사업부문별 매출
+                costs: {
+                    cogs: 0,
+                    depreciation: 0,
+                    labor: 0,
+                    rd: 0,
+                    advertising: 0,
+                    other: 0
+                },
+                operatingProfit: 0
+            };
+
+            // 매출 계산 (시나리오별 성장률 적용)
+            allSegments.forEach((segment, index) => {
+                const scenario = selectedScenarios[segment.name] || 'base';
+                const growthRate = this.getScenarioGrowthRate(scenario, year);
+                const segmentRevenue = (segment.revenue || 0) * Math.pow(1 + growthRate, year);
+                yearData.revenue += segmentRevenue;
+                yearData.segmentRevenues[segment.name] = segmentRevenue;
+            });
+
+            // 비용 계산
+            Object.keys(costStructure).forEach(costType => {
+                const cost = costStructure[costType];
+                if (cost && cost.amount) {
+                    const variableRatio = cost.variableRatio || 0;
+                    const fixedRatio = cost.fixedRatio || 0;
+                    
+                    // 변동비 (매출 대비)
+                    const variableCost = (cost.amount * variableRatio / 100) * (yearData.revenue / baseRevenue);
+                    
+                    // 고정비 (성장률 적용)
+                    const fixedCost = (cost.amount * fixedRatio / 100) * Math.pow(1 + (cost.growthRate || 0) / 100, year);
+                    
+                    yearData.costs[costType] = variableCost + fixedCost;
+                }
+            });
+
+            // 영업이익 계산
+            const totalCosts = Object.values(yearData.costs).reduce((sum, cost) => sum + cost, 0);
+            yearData.operatingProfit = yearData.revenue - totalCosts;
+
+            annualData.push(yearData);
+        }
+
+        return annualData;
+    }
+
+    // 시나리오별 성장률 가져오기
+    getScenarioGrowthRate(scenario, year) {
+        const baseGrowthRate = 0.05; // 기본 5% 성장률
+        
+        switch (scenario) {
+            case 'optimistic':
+                return baseGrowthRate * 1.5; // 7.5%
+            case 'pessimistic':
+                return baseGrowthRate * 0.5; // 2.5%
+            default:
+                return baseGrowthRate; // 5%
+        }
+    }
+
+    // 연도별 차트 생성
+    createAnnualCharts(annualData) {
+        const ctx = document.getElementById('annualCharts');
+        if (!ctx) return;
+
+        // 기존 차트 제거
+        if (this.charts.annualCharts) {
+            this.charts.annualCharts.destroy();
+        }
+
+        const years = annualData.map(data => data.year);
+        const costs = annualData.map(data => Object.values(data.costs).reduce((sum, cost) => sum + cost, 0));
+        const profits = annualData.map(data => data.operatingProfit);
+
+        // 사업부문별 매출 데이터 준비
+        const segmentNames = Object.keys(annualData[0].segmentRevenues);
+        const segmentColors = [
+            'rgba(54, 162, 235, 0.8)',
+            'rgba(255, 99, 132, 0.8)',
+            'rgba(255, 205, 86, 0.8)',
+            'rgba(75, 192, 192, 0.8)',
+            'rgba(153, 102, 255, 0.8)',
+            'rgba(255, 159, 64, 0.8)'
+        ];
+
+        const revenueDatasets = segmentNames.map((segmentName, index) => ({
+            label: segmentName,
+            data: annualData.map(data => data.segmentRevenues[segmentName] || 0),
+            backgroundColor: segmentColors[index % segmentColors.length],
+            borderColor: segmentColors[index % segmentColors.length].replace('0.8', '1'),
+            borderWidth: 1,
+            stack: 'revenue'
+        }));
+
+        this.charts.annualCharts = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: years,
+                datasets: [
+                    ...revenueDatasets,
+                    {
+                        label: '비용',
+                        data: costs,
+                        backgroundColor: 'rgba(169, 169, 169, 0.8)',
+                        borderColor: 'rgba(169, 169, 169, 1)',
+                        borderWidth: 1,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: '영업이익',
+                        data: profits,
+                        backgroundColor: 'rgba(34, 139, 34, 0.8)',
+                        borderColor: 'rgba(34, 139, 34, 1)',
+                        borderWidth: 1,
+                        yAxisID: 'y'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: '연도'
+                        },
+                        ticks: {
+                            maxTicksLimit: 15
+                        }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: '금액 (Million)'
+                        },
+                        beginAtZero: true
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: '연도별 재무 지표'
+                    },
+                    legend: {
+                        position: 'top'
+                    }
+                },
+                layout: {
+                    padding: {
+                        top: 20,
+                        bottom: 20
+                    }
+                }
+            }
+        });
+    }
+
+    // 재무 요약 테이블 생성
+    createFinancialSummaryTable(annualData, discountRate, terminalGrowthRate) {
+        const tbody = document.getElementById('financialSummaryBody');
+        const terminalValueCell = document.getElementById('terminalValue');
+        const terminalValuePVCell = document.getElementById('terminalValuePV');
+        
+        if (!tbody) return;
+
+        // 기존 내용 제거
+        tbody.innerHTML = '';
+
+        // 연도별 데이터 추가
+        annualData.forEach((data, index) => {
+            const presentValue = data.operatingProfit / Math.pow(1 + discountRate / 100, data.year);
+            
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${data.year}년</td>
+                <td>${this.formatCurrency(data.revenue)}</td>
+                <td>${this.formatCurrency(Object.values(data.costs).reduce((sum, cost) => sum + cost, 0))}</td>
+                <td>${this.formatCurrency(data.operatingProfit)}</td>
+                <td>${this.formatCurrency(presentValue)}</td>
+            `;
+            tbody.appendChild(row);
+        });
+
+        // Terminal Value 계산 및 표시
+        const lastYearProfit = annualData[annualData.length - 1].operatingProfit;
+        const terminalValue = lastYearProfit * (1 + terminalGrowthRate / 100) / (discountRate / 100 - terminalGrowthRate / 100);
+        const terminalValuePV = terminalValue / Math.pow(1 + discountRate / 100, annualData.length);
+        
+        if (terminalValueCell) {
+            terminalValueCell.textContent = this.formatCurrency(terminalValue);
+        }
+        
+        if (terminalValuePVCell) {
+            terminalValuePVCell.textContent = this.formatCurrency(terminalValuePV);
+        }
     }
 }
 

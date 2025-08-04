@@ -23,10 +23,14 @@
                 </div>
                 <div class="step" data-step="3">
                     <span class="step-number">3</span>
-                    <span class="step-title">시뮬레이션</span>
+                    <span class="step-title">모델 시각화</span>
                 </div>
                 <div class="step" data-step="4">
                     <span class="step-number">4</span>
+                    <span class="step-title">시뮬레이션</span>
+                </div>
+                <div class="step" data-step="5">
+                    <span class="step-number">5</span>
                     <span class="step-title">투자 분석</span>
                 </div>
             </nav>
@@ -42,7 +46,10 @@
         <main class="main-content">
             <!-- Page 1: 재무 구조 분석 -->
             <div class="page active" id="page1">
-                <h2>재무 구조 분석</h2>
+                <div class="page-header">
+                    <h2>재무 구조 분석</h2>
+                    <span class="unit-subtitle">단위: Million (백만원)</span>
+                </div>
                 <div class="form-section">
                     <h3>기업 정보 및 핵심 가정</h3>
                     <div class="form-grid">
@@ -79,7 +86,7 @@
                         <label for="apiKey">Google AI Studio API 키</label>
                         <input type="password" id="apiKey" placeholder="Google AI Studio에서 발급받은 API 키를 입력하세요">
                         <small class="form-help">
-                            <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer">API 키 발급받기</a>
+                            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">API 키 발급받기</a>
                         </small>
                     </div>
                     <button type="button" id="analyzeCompany" class="btn-primary">기업 분석 요청</button>
@@ -361,8 +368,87 @@
                 </div>
             </div>
 
-            <!-- Page 3: 시뮬레이션 및 가치평가 -->
+            <!-- Page 3: 모델 시각화 -->
             <div class="page" id="page3">
+                <h2>모델 시각화</h2>
+                
+                <!-- 사업부별 시나리오 선택 -->
+                <div class="scenario-selection-section">
+                    <h3>사업부별 시나리오 선택</h3>
+                    <div class="scenario-selectors">
+                        <div class="form-group">
+                            <label for="segment1Scenario">사업부 1 시나리오</label>
+                            <select id="segment1Scenario">
+                                <option value="optimistic">낙관적</option>
+                                <option value="base" selected>기본</option>
+                                <option value="pessimistic">비관적</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="segment2Scenario">사업부 2 시나리오</label>
+                            <select id="segment2Scenario">
+                                <option value="optimistic">낙관적</option>
+                                <option value="base" selected>기본</option>
+                                <option value="pessimistic">비관적</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="segment3Scenario">사업부 3 시나리오</label>
+                            <select id="segment3Scenario">
+                                <option value="optimistic">낙관적</option>
+                                <option value="base" selected>기본</option>
+                                <option value="pessimistic">비관적</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="button" id="updateVisualization" class="btn-primary">차트 업데이트</button>
+                </div>
+
+                <!-- 연도별 차트 -->
+                <div class="annual-charts-section">
+                    <h3>연도별 재무 지표</h3>
+                    <div class="chart-container">
+                        <canvas id="annualCharts"></canvas>
+                    </div>
+                </div>
+
+                <!-- 요약 테이블 -->
+                <div class="summary-table-section">
+                    <h3>재무 요약</h3>
+                    <div class="table-container">
+                        <table id="financialSummaryTable" class="summary-table">
+                            <thead>
+                                <tr>
+                                    <th>연도</th>
+                                    <th>매출</th>
+                                    <th>비용</th>
+                                    <th>영업이익</th>
+                                    <th>현재가치</th>
+                                </tr>
+                            </thead>
+                            <tbody id="financialSummaryBody">
+                                <!-- 데이터가 동적으로 추가됨 -->
+                            </tbody>
+                            <tfoot>
+                                <tr class="terminal-value-row">
+                                    <td><strong>Terminal Value</strong></td>
+                                    <td colspan="2"></td>
+                                    <td id="terminalValue">-</td>
+                                    <td id="terminalValuePV">-</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" id="prevToPage2" class="btn-secondary">이전 단계로</button>
+                    <button type="button" id="nextToPage4" class="btn-primary">다음 단계로</button>
+                </div>
+            </div>
+
+            <!-- Page 4: 시뮬레이션 및 가치평가 -->
+            <div class="page" id="page4">
                 <h2>시뮬레이션 및 가치평가</h2>
                 <div class="simulation-controls">
                     <div class="form-group">
@@ -430,13 +516,13 @@
 
 
                 <div class="form-actions">
-                    <button type="button" id="prevToPage2" class="btn-secondary">이전 단계로</button>
-                    <button type="button" id="nextToPage4" class="btn-primary" disabled>다음 단계로</button>
+                    <button type="button" id="prevToPage3" class="btn-secondary">이전 단계로</button>
+                    <button type="button" id="nextToPage5" class="btn-primary" disabled>다음 단계로</button>
                 </div>
             </div>
 
-            <!-- Page 4: 투자 분석 -->
-            <div class="page" id="page4">
+            <!-- Page 5: 투자 분석 -->
+            <div class="page" id="page5">
                 <h2>투자 분석</h2>
 
                 <div class="investment-results" style="display: none;">
@@ -451,20 +537,16 @@
                         <h3>투자 분석 지표</h3>
                         <div class="investment-stats">
                             <div class="stat-item">
-                                <span class="stat-label">Upside 확률</span>
-                                <span class="stat-value" id="upsideProbability">-</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">Downside 확률</span>
-                                <span class="stat-value" id="downsideProbability">-</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-label">평균 기대 수익률</span>
+                                <span class="stat-label">기대 수익률</span>
                                 <span class="stat-value" id="expectedReturn">-</span>
                             </div>
                             <div class="stat-item">
-                                <span class="stat-label">평균 기대 손실률</span>
-                                <span class="stat-value" id="expectedLoss">-</span>
+                                <span class="stat-label">손익비</span>
+                                <span class="stat-value" id="profitLossRatio">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">샤프 비율</span>
+                                <span class="stat-value" id="sharpeRatio">-</span>
                             </div>
                         </div>
                     </div>
@@ -473,7 +555,7 @@
 
 
                 <div class="form-actions">
-                    <button type="button" id="prevToPage3" class="btn-secondary">이전 단계로</button>
+                    <button type="button" id="prevToPage4" class="btn-secondary">이전 단계로</button>
                 </div>
             </div>
         </main>
