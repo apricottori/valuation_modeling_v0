@@ -91,15 +91,26 @@ class SimulationEngine {
                             break;
                             
                         case 'growth':
-                            // 단순 성장 모델 (영구성장률로 수렴)
+                            // 개선된 성장 모델 (영구성장률로 점진적 수렴)
                             const currentGrowthRate = this.generateNormalRandom(
                                 selectedScenario.meanGrowthRate,
                                 selectedScenario.stdDevGrowthRate
                             );
                             const targetGrowthRate = terminalGrowthRate;
-                            const convergenceFactor = Math.min(1, (year + 1) / years); // 추정기간에 걸쳐 수렴
+                            
+                            // 지수적 수렴 (초기 고성장 유지 후 점진적 수렴)
+                            const convergenceSpeed = 0.15; // 수렴 속도 (0.1~0.2 권장)
+                            const convergenceFactor = 1 - Math.exp(-convergenceSpeed * (year + 1));
                             const effectiveGrowthRate = currentGrowthRate * (1 - convergenceFactor) + targetGrowthRate * convergenceFactor;
-                            predictedRevenue = segmentRevenue * Math.pow(1 + effectiveGrowthRate / 100, year + 1);
+                            
+                            // 복리 효과를 고려한 매출 계산
+                            if (year === 0) {
+                                predictedRevenue = segmentRevenue * (1 + effectiveGrowthRate / 100);
+                            } else {
+                                // 이전 연도 매출에 현재 연도 성장률 적용
+                                const previousRevenue = revenueForecast[year - 1];
+                                predictedRevenue = previousRevenue * (1 + effectiveGrowthRate / 100);
+                            }
                             break;
                             
                         case 'logistic':

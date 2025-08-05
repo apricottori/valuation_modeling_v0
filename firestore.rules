@@ -1,0 +1,31 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // valuations 컬렉션의 문서에 대한 규칙
+    match /valuations/{userId} {
+      // 문서의 ID가 요청을 보낸 사용자의 UID와 같을 때만 읽기, 쓰기를 허용
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // sharedValuations 컬렉션의 문서에 대한 규칙
+    match /sharedValuations/{documentId} {
+      // 모든 인증된 사용자가 읽기 가능
+      allow read: if request.auth != null;
+      // 작성자만 쓰기/삭제 가능
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    
+    // userSettings 컬렉션의 문서에 대한 규칙
+    match /userSettings/{userId} {
+      // 문서의 ID가 요청을 보낸 사용자의 UID와 같을 때만 읽기, 쓰기를 허용
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // 기본 규칙 (개발 환경용)
+    match /{document=**} {
+      // 개발 환경에서는 모든 접근 허용 (프로덕션에서는 제거)
+      allow read, write: if true;
+    }
+  }
+} 

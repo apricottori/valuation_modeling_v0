@@ -53,9 +53,21 @@ class DataManager {
     }
 
     // 데이터 저장
-    saveData(data) {
+    async saveData(data) {
         try {
+            // 로컬 저장
             localStorage.setItem(this.storageKey, JSON.stringify(data));
+            
+            // Firebase 저장 (로그인된 경우)
+            if (window.firebaseConfig && window.firebaseConfig.auth && window.firebaseConfig.auth.currentUser) {
+                try {
+                    await window.firebaseConfig.saveUserData(window.firebaseConfig.auth.currentUser.uid, data);
+                    console.log('Firebase에 데이터 저장 완료');
+                } catch (firebaseError) {
+                    console.error('Firebase 저장 실패:', firebaseError);
+                }
+            }
+            
             return true;
         } catch (error) {
             console.error('데이터 저장 실패:', error);
@@ -64,8 +76,22 @@ class DataManager {
     }
 
     // 데이터 로드
-    getData() {
+    async getData() {
         try {
+            // Firebase에서 데이터 로드 시도 (로그인된 경우)
+            if (window.firebaseConfig && window.firebaseConfig.auth && window.firebaseConfig.auth.currentUser) {
+                try {
+                    const firebaseData = await window.firebaseConfig.loadUserData(window.firebaseConfig.auth.currentUser.uid);
+                    if (firebaseData) {
+                        console.log('Firebase에서 데이터 로드 완료');
+                        return this.migrateData(firebaseData);
+                    }
+                } catch (firebaseError) {
+                    console.error('Firebase 로드 실패:', firebaseError);
+                }
+            }
+            
+            // 로컬 저장소에서 데이터 로드
             const data = localStorage.getItem(this.storageKey);
             if (data) {
                 const parsedData = JSON.parse(data);
@@ -177,9 +203,9 @@ class DataManager {
     }
 
     // 데이터 가져오기
-    importData(data) {
+    async importData(data) {
         if (this.validateData(data)) {
-            this.saveData(data);
+            await this.saveData(data);
             return true;
         } else {
             throw new Error('유효하지 않은 데이터 형식입니다.');
@@ -320,7 +346,7 @@ class DataManager {
     // 매출총이익 자동 계산
     calculateGrossProfit() {
         const currentData = this.getData();
-        if (currentData && currentData.financialStructure.incomeStatement) {
+        if (currentData && currentData.financialStructure && currentData.financialStructure.incomeStatement) {
             const incomeStatement = currentData.financialStructure.incomeStatement;
             const revenue = parseFloat(incomeStatement.revenue) || 0;
             const costOfGoodsSold = parseFloat(incomeStatement.costOfGoodsSold) || 0;
@@ -336,7 +362,7 @@ class DataManager {
     // 기타 사업부문 매출 자동 계산
     calculateOtherSegmentRevenue() {
         const currentData = this.getData();
-        if (currentData && currentData.financialStructure.incomeStatement) {
+        if (currentData && currentData.financialStructure && currentData.financialStructure.incomeStatement) {
             const totalRevenue = parseFloat(currentData.financialStructure.incomeStatement.revenue) || 0;
             const userSegmentRevenue = this.calculateTotalSegmentRevenue();
             const otherRevenue = Math.max(0, totalRevenue - userSegmentRevenue);
@@ -357,20 +383,23 @@ class DataManager {
     // 기타 비용 자동 계산
     calculateOtherCost() {
         const currentData = this.getData();
-        if (currentData && currentData.financialStructure.incomeStatement) {
+        if (currentData && currentData.financialStructure && currentData.financialStructure.incomeStatement && currentData.financialStructure.costStructure) {
             const revenue = parseFloat(currentData.financialStructure.incomeStatement.revenue.toString().replace(/,/g, '')) || 0;
             const operatingIncome = parseFloat(currentData.financialStructure.incomeStatement.operatingIncome.toString().replace(/,/g, '')) || 0;
             const totalCost = revenue - operatingIncome;
             
             // 사용자가 입력한 비용들의 합계 계산
             const costStructure = currentData.financialStructure.costStructure;
-            const userCosts = [
-                parseFloat(costStructure.cogs.amount.toString().replace(/,/g, '')) || 0,
-                parseFloat(costStructure.depreciation.amount.toString().replace(/,/g, '')) || 0,
-                parseFloat(costStructure.labor.amount.toString().replace(/,/g, '')) || 0,
-                parseFloat(costStructure.rd.amount.toString().replace(/,/g, '')) || 0,
-                parseFloat(costStructure.advertising.amount.toString().replace(/,/g, '')) || 0
-            ];
+            const userCosts = [];
+            
+            // 모든 비용 항목들을 순회하면서 기타 비용을 제외한 모든 비용 합계 계산
+            Object.keys(costStructure).forEach(costType => {
+                if (costType !== 'other' && costStructure[costType] && costStructure[costType].amount) {
+                    const costAmount = parseFloat(costStructure[costType].amount.toString().replace(/,/g, '')) || 0;
+                    userCosts.push(costAmount);
+                }
+            });
+            
             const userCostSum = userCosts.reduce((sum, cost) => sum + cost, 0);
             
             const otherCost = Math.max(0, totalCost - userCostSum);

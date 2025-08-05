@@ -1,3 +1,26 @@
+// Firebase 인증 상태 리스너 설정 (기존 코드 - 호환성을 위해 유지)
+function setupFirebaseAuthListener() {
+    if (window.firebaseConfig && window.firebaseConfig.auth) {
+        window.firebaseConfig.auth.onAuthStateChanged((user) => {
+            if (user) {
+                console.log('로그인된 사용자 UID:', user.uid);
+                
+                // 사용자별 데이터 로드
+                if (window.valueWebApp) {
+                    window.valueWebApp.loadData();
+                }
+            } else {
+                console.log('사용자가 로그아웃됨');
+                
+                // 로컬 데이터 초기화
+                if (window.dataManager) {
+                    window.dataManager.clearData();
+                }
+            }
+        });
+    }
+}
+
 // 메인 애플리케이션
 class ValueWebApp {
     constructor() {
@@ -55,6 +78,33 @@ class ValueWebApp {
         
         const parsed = parseFloat(cleaned);
         return isNaN(parsed) ? 0 : parsed;
+    }
+
+    // 단위 변환 함수 (B, T, M 단위를 Million 단위로 변환)
+    parseCurrencyToMillion(str) {
+        if (!str || typeof str !== 'string') return 0;
+        
+        // 공백 제거 및 대문자 변환
+        let cleaned = str.trim().toUpperCase();
+        
+        // 단위별 변환
+        if (cleaned.includes('T')) {
+            // Trillion -> Million (1T = 1,000,000M)
+            const value = parseFloat(cleaned.replace('T', ''));
+            return isNaN(value) ? 0 : value * 1000000;
+        } else if (cleaned.includes('B')) {
+            // Billion -> Million (1B = 1,000M)
+            const value = parseFloat(cleaned.replace('B', ''));
+            return isNaN(value) ? 0 : value * 1000;
+        } else if (cleaned.includes('M')) {
+            // Million (이미 Million 단위)
+            const value = parseFloat(cleaned.replace('M', ''));
+            return isNaN(value) ? 0 : value;
+        } else {
+            // 단위가 없는 경우 숫자만 파싱
+            const value = parseFloat(cleaned);
+            return isNaN(value) ? 0 : value;
+        }
     }
 
     // 입력 필드에 숫자 포맷팅 적용
@@ -158,11 +208,33 @@ class ValueWebApp {
     }
 
     // 애플리케이션 초기화
-    initializeApp() {
-        this.setupEventListeners();
-        this.setupNumberFormatting();
-        this.loadData();
-        this.updateUI();
+    async initializeApp() {
+        try {
+            // Firebase 초기화
+            if (window.firebaseConfig) {
+                window.firebaseConfig.initializeFirebase();
+                
+                // 인증 이벤트 리스너 설정
+                window.firebaseConfig.setupAuthEventListeners();
+            }
+            
+            // 이벤트 리스너 설정
+            this.setupEventListeners();
+            this.setupNumberFormatting();
+            
+            // 데이터 로드
+            await this.loadData();
+            this.updateUI();
+            
+            // 자동 저장 설정
+            if (window.firebaseConfig) {
+                window.firebaseConfig.setupAutoSave();
+            }
+            
+            console.log('앱 초기화 완료');
+        } catch (error) {
+            console.error('앱 초기화 실패:', error);
+        }
     }
 
     // 이벤트 리스너 설정
@@ -188,6 +260,12 @@ class ValueWebApp {
             this.importData(e.target.files[0]);
         });
 
+        // Portfolio Manager 관련 이벤트 리스너
+        this.setupPortfolioManagerEvents();
+
+        // 설정 페이지 이벤트 리스너
+        this.setupSettingsEvents();
+
         // Page 1 이벤트
         this.setupPage1Events();
         
@@ -207,35 +285,35 @@ class ValueWebApp {
     // Page 1 이벤트 설정
     setupPage1Events() {
         // 기업 정보 입력
-        document.getElementById('companyName').addEventListener('input', (e) => {
-            this.updateCompanyInfo('name', e.target.value);
+        document.getElementById('companyName').addEventListener('input', async (e) => {
+            await this.updateCompanyInfo('name', e.target.value);
         });
 
-        document.getElementById('discountRate').addEventListener('input', (e) => {
-            this.updateCompanyInfo('discountRate', parseFloat(e.target.value));
+        document.getElementById('discountRate').addEventListener('input', async (e) => {
+            await this.updateCompanyInfo('discountRate', parseFloat(e.target.value));
         });
 
-        document.getElementById('taxRate').addEventListener('input', (e) => {
-            this.updateCompanyInfo('taxRate', parseFloat(e.target.value));
+        document.getElementById('taxRate').addEventListener('input', async (e) => {
+            await this.updateCompanyInfo('taxRate', parseFloat(e.target.value));
         });
 
-        document.getElementById('forecastPeriod').addEventListener('input', (e) => {
-            this.updateCompanyInfo('forecastPeriod', parseInt(e.target.value));
+        document.getElementById('forecastPeriod').addEventListener('input', async (e) => {
+            await this.updateCompanyInfo('forecastPeriod', parseInt(e.target.value));
         });
 
-        document.getElementById('terminalGrowthRate').addEventListener('input', (e) => {
-            this.updateCompanyInfo('terminalGrowthRate', parseFloat(e.target.value));
+        document.getElementById('terminalGrowthRate').addEventListener('input', async (e) => {
+            await this.updateCompanyInfo('terminalGrowthRate', parseFloat(e.target.value));
         });
 
-        document.getElementById('marketValue').addEventListener('input', (e) => {
+        document.getElementById('marketValue').addEventListener('input', async (e) => {
             const value = this.parseFormattedNumber(e.target.value);
-            this.updateCompanyInfo('marketValue', value);
+            await this.updateCompanyInfo('marketValue', value);
         });
 
         // 손익계산서 입력
-        document.getElementById('revenue').addEventListener('input', (e) => {
+        document.getElementById('revenue').addEventListener('input', async (e) => {
             const value = this.parseFormattedNumber(e.target.value);
-            this.updateIncomeStatement('revenue', value);
+            await this.updateIncomeStatement('revenue', value);
             this.calculateGrossProfit();
             
             // 디바운싱을 위한 타이머 설정
@@ -245,55 +323,66 @@ class ValueWebApp {
             }, 300);
         });
 
-        document.getElementById('costOfGoodsSold').addEventListener('input', (e) => {
+        document.getElementById('costOfGoodsSold').addEventListener('input', async (e) => {
             const value = this.parseFormattedNumber(e.target.value);
-            this.updateIncomeStatement('costOfGoodsSold', value);
+            await this.updateIncomeStatement('costOfGoodsSold', value);
             this.calculateGrossProfit();
             // 비용 구조의 매출원가도 자동 업데이트
             this.updateCostStructure('cogs', 'amount', value);
             document.getElementById('cogs-amount').value = this.formatNumber(value);
         });
 
-        document.getElementById('operatingIncome').addEventListener('input', (e) => {
+        document.getElementById('operatingIncome').addEventListener('input', async (e) => {
             const value = this.parseFormattedNumber(e.target.value);
-            this.updateIncomeStatement('operatingIncome', value);
+            await this.updateIncomeStatement('operatingIncome', value);
             this.calculateOtherCost();
         });
 
+        // 재무 데이터 로딩 설정
+        this.setupFinancialDataLoading();
+
         // 사업부문 관리
-        document.getElementById('addSegment').addEventListener('click', () => {
-            this.addBusinessSegment();
+        document.getElementById('addSegment').addEventListener('click', async () => {
+            await this.addBusinessSegment();
         });
 
         // 사업부문 revenue 입력 이벤트
-        document.addEventListener('input', (e) => {
+        document.addEventListener('input', async (e) => {
             if (e.target.classList.contains('segment-revenue')) {
                 // 디바운싱을 위한 타이머 설정
                 clearTimeout(this.revenueUpdateTimer);
-                this.revenueUpdateTimer = setTimeout(() => {
-                    this.updateBusinessSegments();
+                this.revenueUpdateTimer = setTimeout(async () => {
+                    await this.updateBusinessSegments();
                 }, 300); // 300ms 지연
             }
             if (e.target.classList.contains('segment-name')) {
                 // 사업부문 데이터 업데이트
-                this.updateBusinessSegments();
+                await this.updateBusinessSegments();
             }
         });
 
         // 사업부문 삭제 버튼 이벤트
-        document.addEventListener('click', (e) => {
+        document.addEventListener('click', async (e) => {
             if (e.target.classList.contains('btn-remove-segment')) {
-                setTimeout(() => {
-                    this.updateBusinessSegments();
+                setTimeout(async () => {
+                    await this.updateBusinessSegments();
                 }, 0);
             }
         });
 
         // 비용 구조 입력
         this.setupCostStructureEvents();
+        
+        // 비용 항목 추가/삭제 기능
+        this.setupDynamicCostItems();
 
-        // AI 분석 버튼
+        // AI 분석 버튼 (기존)
         document.getElementById('analyzeCompany').addEventListener('click', () => {
+            this.analyzeCompanyWithAI();
+        });
+
+        // 인라인 AI 분석 버튼 (기업명 옆)
+        document.getElementById('analyzeCompanyInline').addEventListener('click', () => {
             this.analyzeCompanyWithAI();
         });
 
@@ -317,18 +406,492 @@ class ValueWebApp {
 
     }
 
+    // 재무 데이터 로딩 설정
+    setupFinancialDataLoading() {
+        // 재무 데이터 로딩 버튼
+        document.getElementById('loadFinancialData').addEventListener('click', () => {
+            this.loadFinancialData();
+        });
+
+        // 데이터 적용 버튼
+        document.getElementById('applyFinancialData').addEventListener('click', () => {
+            this.applyFinancialData();
+        });
+
+        // 초기화 버튼
+        document.getElementById('clearFinancialData').addEventListener('click', () => {
+            this.clearFinancialData();
+        });
+
+        // 티커 입력 필드 엔터 키 이벤트
+        document.getElementById('tickerSymbol').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.loadFinancialData();
+            }
+        });
+    }
+
+    // 재무 데이터 로딩
+    async loadFinancialData() {
+        // 사용자가 선택한 데이터 소스 가져오기
+        const dataSource = document.getElementById('dataSource').value;
+        
+        // 기존에 입력된 기업명 가져오기
+        const companyName = document.getElementById('companyName').value.trim();
+        
+        if (!companyName) {
+            alert('기업명을 먼저 입력해주세요.');
+            return;
+        }
+
+        // 로딩 상태 표시
+        const resultBox = document.getElementById('financialDataResult');
+        const loadingDiv = document.getElementById('dataLoading');
+        const contentDiv = document.getElementById('dataContent');
+        
+        resultBox.style.display = 'block';
+        loadingDiv.style.display = 'block';
+        contentDiv.style.display = 'none';
+
+        try {
+            // 1단계: 기업명으로 티커 조회
+            // 설정에서 저장된 API 키 가져오기
+            let apiKey = '';
+            try {
+                const currentUser = firebase.auth().currentUser;
+                if (currentUser) {
+                    const userSettingsDoc = await firebase.firestore().collection('userSettings').doc(currentUser.uid).get();
+                    if (userSettingsDoc.exists) {
+                        const settings = userSettingsDoc.data();
+                        apiKey = settings.geminiApiKey || '';
+                    }
+                }
+            } catch (error) {
+                console.error('API 키 로드 오류:', error);
+            }
+
+            if (!apiKey || !apiKey.trim()) {
+                alert('설정에서 Gemini API 키를 먼저 입력해주세요.\n\n설정 방법:\n1. 우측 상단 설정 버튼(⚙️) 클릭\n2. API 설정에서 Gemini API 키 입력\n3. 저장 후 다시 시도');
+                return;
+            }
+
+            const ticker = await this.callGeminiForTicker(apiKey, companyName);
+            document.getElementById('tickerSymbol').value = ticker;
+
+            // 2단계: 재무 데이터 로딩 (실제 API 호출 시도)
+            let financialData;
+                                    try {
+                            // 실제 API 호출 시도
+                            financialData = await this.fetchFinancialDataFromAPI(ticker, dataSource);
+                        } catch (apiError) {
+                            console.error('실제 API 호출 실패:', apiError);
+                            throw new Error(`재무 데이터를 가져올 수 없습니다: ${apiError.message}`);
+                        }
+            
+            // 데이터 표시
+            this.displayFinancialData3Years(financialData);
+            
+            // 로딩 완료
+            loadingDiv.style.display = 'none';
+            contentDiv.style.display = 'block';
+            
+        } catch (error) {
+            console.error('재무 데이터 로딩 실패:', error);
+            alert('재무 데이터 로딩에 실패했습니다. 다시 시도해주세요.');
+            
+            loadingDiv.style.display = 'none';
+            resultBox.style.display = 'none';
+        }
+    }
+
+    // 실제 재무 데이터 API 호출
+    async fetchFinancialDataFromAPI(ticker, dataSource) {
+        switch (dataSource) {
+            case 'alpha_vantage':
+                return await this.fetchFromAlphaVantage(ticker, '0BU57E8UVXNS35OW');
+            case 'yahoo_finance':
+                return await this.fetchFromYahooFinance(ticker);
+            case 'financial_modeling_prep':
+                const apiKey = document.getElementById('financialApiKey').value.trim();
+                if (!apiKey) {
+                    throw new Error('Financial Modeling Prep는 API 키가 필요합니다.');
+                }
+                return await this.fetchFromFinancialModelingPrep(ticker, apiKey);
+            default:
+                throw new Error('지원하지 않는 데이터 소스입니다.');
+        }
+    }
+
+    // Alpha Vantage API 호출
+    async fetchFromAlphaVantage(ticker, apiKey) {
+        try {
+            // 손익계산서 데이터 가져오기
+            const incomeStatementResponse = await fetch(`https://www.alphavantage.co/query?function=INCOME_STATEMENT&symbol=${ticker}&apikey=${apiKey}`);
+            const incomeStatementData = await incomeStatementResponse.json();
+            
+            // 재무상태표 데이터 가져오기
+            const balanceSheetResponse = await fetch(`https://www.alphavantage.co/query?function=BALANCE_SHEET&symbol=${ticker}&apikey=${apiKey}`);
+            const balanceSheetData = await balanceSheetResponse.json();
+            
+            // 현금흐름표 데이터 가져오기 (감가상각 포함)
+            const cashFlowResponse = await fetch(`https://www.alphavantage.co/query?function=CASH_FLOW&symbol=${ticker}&apikey=${apiKey}`);
+            const cashFlowData = await cashFlowResponse.json();
+            
+            // 에러 체크
+            if (incomeStatementData['Error Message'] || balanceSheetData['Error Message'] || cashFlowData['Error Message']) {
+                throw new Error('API 호출 중 오류가 발생했습니다.');
+            }
+            if (incomeStatementData['Note'] || balanceSheetData['Note'] || cashFlowData['Note']) {
+                throw new Error('API 호출 한도 초과: ' + (incomeStatementData['Note'] || balanceSheetData['Note'] || cashFlowData['Note']));
+            }
+            
+            return this.transformAlphaVantageData(incomeStatementData, balanceSheetData, cashFlowData);
+        } catch (error) {
+            console.error('Alpha Vantage API 호출 실패:', error);
+            throw new Error(`Alpha Vantage API 호출 실패: ${error.message}`);
+        }
+    }
+
+    // Yahoo Finance API 호출
+    async fetchFromYahooFinance(ticker) {
+        try {
+            // Yahoo Finance는 CORS 제한으로 인해 재무제표 데이터를 직접 가져올 수 없음
+            throw new Error('Yahoo Finance는 현재 재무제표 데이터를 지원하지 않습니다. 다른 데이터 소스를 선택해주세요.');
+        } catch (error) {
+            console.error('Yahoo Finance API 호출 실패:', error);
+            throw new Error(`Yahoo Finance API 호출 실패: ${error.message}`);
+        }
+    }
+
+    // Financial Modeling Prep API 호출
+    async fetchFromFinancialModelingPrep(ticker, apiKey) {
+        try {
+            // 손익계산서 데이터 가져오기
+            const incomeStatementResponse = await fetch(`https://financialmodelingprep.com/api/v3/income-statement/${ticker}?limit=3&apikey=${apiKey}`);
+            const incomeStatementData = await incomeStatementResponse.json();
+            
+            // 재무상태표 데이터 가져오기
+            const balanceSheetResponse = await fetch(`https://financialmodelingprep.com/api/v3/balance-sheet-statement/${ticker}?limit=3&apikey=${apiKey}`);
+            const balanceSheetData = await balanceSheetResponse.json();
+            
+            // 현금흐름표 데이터 가져오기 (감가상각 포함)
+            const cashFlowResponse = await fetch(`https://financialmodelingprep.com/api/v3/cash-flow-statement/${ticker}?limit=3&apikey=${apiKey}`);
+            const cashFlowData = await cashFlowResponse.json();
+            
+            // 에러 체크
+            if (incomeStatementData['Error Message'] || balanceSheetData['Error Message'] || cashFlowData['Error Message']) {
+                throw new Error('API 호출 중 오류가 발생했습니다.');
+            }
+            
+            return this.transformFinancialModelingPrepData(incomeStatementData, balanceSheetData, cashFlowData);
+        } catch (error) {
+            console.error('Financial Modeling Prep API 호출 실패:', error);
+            throw new Error(`Financial Modeling Prep API 호출 실패: ${error.message}`);
+        }
+    }
+
+    // Alpha Vantage 데이터 변환 (달러 → Million 단위)
+    transformAlphaVantageData(incomeStatementData, balanceSheetData, cashFlowData) {
+        const currentYear = new Date().getFullYear();
+        const years = [currentYear - 1, currentYear - 2, currentYear - 3]; // 최신 연도를 올해-1로 수정
+        
+        const incomeStatement = {};
+        const balanceSheet = {};
+        const cashFlow = {};
+        
+        // 달러를 Million 단위로 변환하는 헬퍼 함수
+        const convertToMillion = (value) => {
+            const numValue = parseFloat(value) || 0;
+            return numValue / 1000000; // 1,000,000으로 나누기
+        };
+        
+        // 손익계산서 데이터 변환
+        if (incomeStatementData.annualReports) {
+            years.forEach((year, index) => {
+                const annualData = incomeStatementData.annualReports[index];
+                if (annualData) {
+                    incomeStatement[year] = {
+                        revenue: convertToMillion(annualData.totalRevenue),
+                        cogs: convertToMillion(annualData.costOfRevenue),
+                        grossProfit: convertToMillion(annualData.grossProfit),
+                        sellingGeneralAndAdmin: convertToMillion(annualData.sellingGeneralAndAdministrative),
+                        researchAndDevelopment: convertToMillion(annualData.researchAndDevelopment),
+                        operatingIncome: convertToMillion(annualData.operatingIncome),
+                        netIncome: convertToMillion(annualData.netIncome)
+                    };
+                }
+            });
+        }
+        
+        // 재무상태표 데이터 변환
+        if (balanceSheetData.annualReports) {
+            years.forEach((year, index) => {
+                const annualData = balanceSheetData.annualReports[index];
+                if (annualData) {
+                    balanceSheet[year] = {
+                        totalAssets: convertToMillion(annualData.totalAssets),
+                        currentAssets: convertToMillion(annualData.totalCurrentAssets),
+                        totalLiabilities: convertToMillion(annualData.totalLiabilities),
+                        currentLiabilities: convertToMillion(annualData.totalCurrentLiabilities),
+                        totalEquity: convertToMillion(annualData.totalShareholderEquity)
+                    };
+                }
+            });
+        }
+        
+        // 현금흐름표 데이터 변환 (감가상각 포함)
+        if (cashFlowData.annualReports) {
+            years.forEach((year, index) => {
+                const annualData = cashFlowData.annualReports[index];
+                if (annualData) {
+                    cashFlow[year] = {
+                        depreciation: convertToMillion(annualData.depreciationDepletionAndAmortization),
+                        operatingCashFlow: convertToMillion(annualData.operatingCashflow),
+                        investingCashFlow: convertToMillion(annualData.cashflowFromInvestment),
+                        financingCashFlow: convertToMillion(annualData.cashflowFromFinancing),
+                        freeCashFlow: convertToMillion(annualData.operatingCashflow) - convertToMillion(annualData.capitalExpenditures)
+                    };
+                }
+            });
+        }
+        
+        return { incomeStatement, balanceSheet, cashFlow };
+    }
+
+    // Financial Modeling Prep 데이터 변환 (달러 → Million 단위)
+    transformFinancialModelingPrepData(incomeStatementData, balanceSheetData, cashFlowData) {
+        const currentYear = new Date().getFullYear();
+        const years = [currentYear - 1, currentYear - 2, currentYear - 3]; // 최신 연도를 올해-1로 수정
+        
+        const incomeStatement = {};
+        const balanceSheet = {};
+        const cashFlow = {};
+        
+        // 달러를 Million 단위로 변환하는 헬퍼 함수
+        const convertToMillion = (value) => {
+            const numValue = parseFloat(value) || 0;
+            return numValue / 1000000; // 1,000,000으로 나누기
+        };
+        
+        // 손익계산서 데이터 변환
+        if (Array.isArray(incomeStatementData)) {
+            years.forEach((year, index) => {
+                const annualData = incomeStatementData[index];
+                if (annualData) {
+                    incomeStatement[year] = {
+                        revenue: convertToMillion(annualData.revenue),
+                        cogs: convertToMillion(annualData.costOfRevenue),
+                        grossProfit: convertToMillion(annualData.grossProfit),
+                        sellingGeneralAndAdmin: convertToMillion(annualData.sellingGeneralAndAdministrative),
+                        researchAndDevelopment: convertToMillion(annualData.researchAndDevelopment),
+                        operatingIncome: convertToMillion(annualData.operatingIncome),
+                        netIncome: convertToMillion(annualData.netIncome)
+                    };
+                }
+            });
+        }
+        
+        // 재무상태표 데이터 변환
+        if (Array.isArray(balanceSheetData)) {
+            years.forEach((year, index) => {
+                const annualData = balanceSheetData[index];
+                if (annualData) {
+                    balanceSheet[year] = {
+                        totalAssets: convertToMillion(annualData.totalAssets),
+                        currentAssets: convertToMillion(annualData.totalCurrentAssets),
+                        totalLiabilities: convertToMillion(annualData.totalLiabilities),
+                        currentLiabilities: convertToMillion(annualData.totalCurrentLiabilities),
+                        totalEquity: convertToMillion(annualData.totalStockholdersEquity)
+                    };
+                }
+            });
+        }
+        
+        // 현금흐름표 데이터 변환 (감가상각 포함)
+        if (Array.isArray(cashFlowData)) {
+            years.forEach((year, index) => {
+                const annualData = cashFlowData[index];
+                if (annualData) {
+                    cashFlow[year] = {
+                        depreciation: convertToMillion(annualData.depreciationAndAmortization),
+                        operatingCashFlow: convertToMillion(annualData.operatingCashFlow),
+                        investingCashFlow: convertToMillion(annualData.netCashUsedForInvestingActivities),
+                        financingCashFlow: convertToMillion(annualData.netCashUsedProvidedByFinancingActivities),
+                        freeCashFlow: convertToMillion(annualData.freeCashFlow)
+                    };
+                }
+            });
+        }
+        
+        return { incomeStatement, balanceSheet, cashFlow };
+    }
+
+    // 시뮬레이션 함수 제거됨 - 실제 API만 사용
+
+    // 3년치 재무 데이터 표시
+    displayFinancialData3Years(data) {
+        const currentYear = new Date().getFullYear();
+        const years = [currentYear - 1, currentYear - 2, currentYear - 3]; // 최신 연도를 올해-1로 수정
+        
+        // 테이블 헤더 연도 업데이트
+        document.getElementById('year1').textContent = years[0];
+        document.getElementById('year2').textContent = years[1];
+        document.getElementById('year3').textContent = years[2];
+        document.getElementById('bsYear1').textContent = years[0];
+        document.getElementById('bsYear2').textContent = years[1];
+        document.getElementById('bsYear3').textContent = years[2];
+        document.getElementById('cfYear1').textContent = years[0];
+        document.getElementById('cfYear2').textContent = years[1];
+        document.getElementById('cfYear3').textContent = years[2];
+        
+        // 손익계산서 데이터 표시
+        years.forEach((year, index) => {
+            const yearIndex = index + 1;
+            const incomeData = data.incomeStatement[year];
+            
+            document.getElementById(`revenue${yearIndex}`).textContent = this.formatCurrency(incomeData.revenue);
+            document.getElementById(`cogs${yearIndex}`).textContent = this.formatCurrency(incomeData.cogs);
+            document.getElementById(`grossProfit${yearIndex}`).textContent = this.formatCurrency(incomeData.grossProfit);
+            document.getElementById(`sellingGeneralAndAdmin${yearIndex}`).textContent = this.formatCurrency(incomeData.sellingGeneralAndAdmin || 0);
+            document.getElementById(`researchAndDevelopment${yearIndex}`).textContent = this.formatCurrency(incomeData.researchAndDevelopment || 0);
+            document.getElementById(`operatingIncome${yearIndex}`).textContent = this.formatCurrency(incomeData.operatingIncome);
+            document.getElementById(`netIncome${yearIndex}`).textContent = this.formatCurrency(incomeData.netIncome);
+        });
+
+        // 재무상태표 데이터 표시
+        years.forEach((year, index) => {
+            const yearIndex = index + 1;
+            const balanceData = data.balanceSheet[year];
+            
+            document.getElementById(`totalAssets${yearIndex}`).textContent = this.formatCurrency(balanceData.totalAssets);
+            document.getElementById(`currentAssets${yearIndex}`).textContent = this.formatCurrency(balanceData.currentAssets);
+            document.getElementById(`totalLiabilities${yearIndex}`).textContent = this.formatCurrency(balanceData.totalLiabilities);
+            document.getElementById(`currentLiabilities${yearIndex}`).textContent = this.formatCurrency(balanceData.currentLiabilities);
+            document.getElementById(`totalEquity${yearIndex}`).textContent = this.formatCurrency(balanceData.totalEquity);
+        });
+
+        // 현금흐름표 데이터 표시
+        years.forEach((year, index) => {
+            const yearIndex = index + 1;
+            const cashFlowData = data.cashFlow[year];
+            
+            if (cashFlowData) {
+                document.getElementById(`depreciation${yearIndex}`).textContent = this.formatCurrency(cashFlowData.depreciation || 0);
+                document.getElementById(`operatingCashFlow${yearIndex}`).textContent = this.formatCurrency(cashFlowData.operatingCashFlow || 0);
+                document.getElementById(`investingCashFlow${yearIndex}`).textContent = this.formatCurrency(cashFlowData.investingCashFlow || 0);
+                document.getElementById(`financingCashFlow${yearIndex}`).textContent = this.formatCurrency(cashFlowData.financingCashFlow || 0);
+                document.getElementById(`freeCashFlow${yearIndex}`).textContent = this.formatCurrency(cashFlowData.freeCashFlow || 0);
+            }
+        });
+    }
+
+    // 재무 데이터 적용 (최신 데이터)
+    applyFinancialData() {
+        const revenue = document.getElementById('revenue1').textContent;
+        const costOfGoodsSold = document.getElementById('cogs1').textContent;
+        const operatingIncome = document.getElementById('operatingIncome1').textContent;
+
+        // 단위 변환하여 Million 단위로 변환
+        const revenueInMillion = this.parseCurrencyToMillion(revenue);
+        const costOfGoodsSoldInMillion = this.parseCurrencyToMillion(costOfGoodsSold);
+        const operatingIncomeInMillion = this.parseCurrencyToMillion(operatingIncome);
+
+        // 기존 입력 필드에 적용 (Million 단위로 포맷팅)
+        document.getElementById('revenue').value = this.formatNumber(revenueInMillion);
+        document.getElementById('costOfGoodsSold').value = this.formatNumber(costOfGoodsSoldInMillion);
+        document.getElementById('operatingIncome').value = this.formatNumber(operatingIncomeInMillion);
+
+        // 데이터 업데이트
+        this.updateIncomeStatement('revenue', revenueInMillion);
+        this.updateIncomeStatement('costOfGoodsSold', costOfGoodsSoldInMillion);
+        this.updateIncomeStatement('operatingIncome', operatingIncomeInMillion);
+        
+        // 매출총이익 계산
+        this.calculateGrossProfit();
+        this.calculateOtherSegmentRevenue();
+        this.calculateOtherCost();
+
+        alert('최신 재무 데이터가 성공적으로 적용되었습니다.');
+    }
+
+    // 재무 데이터 초기화
+    clearFinancialData() {
+        document.getElementById('financialDataResult').style.display = 'none';
+        document.getElementById('tickerSymbol').value = '';
+        document.getElementById('dataSource').value = 'alpha_vantage';
+        // document.getElementById('financialApiKey').value = ''; // 주석 처리됨
+    }
+
+
+
+    // Gemini API로 티커 조회
+    async callGeminiForTicker(apiKey, companyName) {
+        const prompt = `${companyName}을 주식시장에서 조회하려고 해
+${companyName}의 주식 티커를 알려줄래? 
+부연설명 없이 **티커 이름만 대답해줘**`;
+
+        try {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{
+                            text: prompt
+                        }]
+                    }]
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('API 응답 오류:', response.status, errorText);
+                throw new Error(`API 호출 실패: ${response.status} ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            console.log('API 응답:', data);
+            
+            if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+                const ticker = data.candidates[0].content.parts[0].text.trim();
+                
+                // 티커 심볼 파싱 (숫자나 특수문자 제거, 대문자로 변환)
+                const cleanTicker = ticker.replace(/[^A-Za-z]/g, '').toUpperCase();
+                
+                return cleanTicker;
+            } else {
+                throw new Error('API 응답 형식이 올바르지 않습니다.');
+            }
+        } catch (error) {
+            console.error('API 호출 상세 오류:', error);
+            throw new Error(`API 호출 중 오류: ${error.message}`);
+        }
+    }
+
     // Page 2 이벤트 설정
     setupPage2Events() {
-        // 고정비 성장률 입력
-        const costTypes = ['cogs', 'depreciation', 'labor', 'rd', 'advertising', 'other'];
-        costTypes.forEach(type => {
-            document.getElementById(`${type}-fixed-mean`).addEventListener('input', (e) => {
-                this.updateFixedCostGrowth(type, 'mean', parseFloat(e.target.value));
-            });
-            document.getElementById(`${type}-fixed-std`).addEventListener('input', (e) => {
-                this.updateFixedCostGrowth(type, 'stdDev', parseFloat(e.target.value));
-            });
+        // 고정비 성장률 입력 (고정 항목들)
+        const fixedCostTypes = ['cogs', 'other'];
+        fixedCostTypes.forEach(type => {
+            const meanInput = document.getElementById(`${type}-fixed-mean`);
+            const stdInput = document.getElementById(`${type}-fixed-std`);
+            
+            if (meanInput) {
+                meanInput.addEventListener('input', (e) => {
+                    this.updateFixedCostGrowth(type, 'mean', parseFloat(e.target.value));
+                });
+            }
+            if (stdInput) {
+                stdInput.addEventListener('input', (e) => {
+                    this.updateFixedCostGrowth(type, 'stdDev', parseFloat(e.target.value));
+                });
+            }
         });
+
+        // 동적 비용 항목들의 고정비 성장률 이벤트 리스너
+        this.setupDynamicCostGrowthEvents();
 
         // 네비게이션
         document.getElementById('prevToPage1').addEventListener('click', () => {
@@ -392,9 +955,10 @@ class ValueWebApp {
 
     // 비용 구조 이벤트 설정
     setupCostStructureEvents() {
-        const costItems = ['cogs', 'depreciation', 'labor', 'rd', 'advertising', 'other'];
+        // 고정 비용 항목들 (매출원가, 기타 비용)
+        const fixedCostItems = ['cogs', 'other'];
         
-        costItems.forEach(item => {
+        fixedCostItems.forEach(item => {
             const variableSlider = document.getElementById(`${item}-variable`);
             const variableValue = document.getElementById(`${item}-variable-value`);
             const fixedValue = document.getElementById(`${item}-fixed-value`);
@@ -425,66 +989,384 @@ class ValueWebApp {
         });
     }
 
+    // 동적 비용 항목 관리
+    setupDynamicCostItems() {
+        // 비용 항목 추가 버튼
+        document.getElementById('addCostItem').addEventListener('click', () => {
+            this.showAddCostItemModal();
+        });
+
+        // 기존 동적 비용 항목들에 이벤트 리스너 추가
+        this.setupDynamicCostItemEvents();
+    }
+
+    // 동적 비용 항목 이벤트 설정
+    setupDynamicCostItemEvents() {
+        // 삭제 버튼 이벤트
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('btn-remove-cost')) {
+                const costItem = e.target.closest('.cost-item');
+                const costType = costItem.dataset.costType;
+                this.removeCostItem(costType, costItem);
+            }
+        });
+
+        // 슬라이더 이벤트 (동적으로 생성되는 요소들)
+        document.addEventListener('input', (e) => {
+            if (e.target.classList.contains('slider-input') && e.target.closest('.dynamic-cost')) {
+                const costItem = e.target.closest('.cost-item');
+                const costType = costItem.dataset.costType;
+                const variableRatio = parseInt(e.target.value);
+                const fixedRatio = 100 - variableRatio;
+                
+                // UI 업데이트
+                const variableValue = costItem.querySelector('.variable-ratio-new');
+                const fixedValue = costItem.querySelector('.fixed-ratio-new');
+                variableValue.textContent = `${variableRatio}%`;
+                fixedValue.textContent = `${fixedRatio}%`;
+                
+                // 데이터 업데이트
+                this.updateCostStructure(costType, 'variableRatio', variableRatio);
+                this.updateCostStructure(costType, 'fixedRatio', fixedRatio);
+            }
+        });
+
+        // 금액 입력 이벤트 (동적으로 생성되는 요소들)
+        document.addEventListener('input', (e) => {
+            if (e.target.id && e.target.id.endsWith('-amount') && e.target.closest('.dynamic-cost') && !e.target.readOnly) {
+                const costType = e.target.id.replace('-amount', '');
+                const amount = this.parseFormattedNumber(e.target.value);
+                this.updateCostStructure(costType, 'amount', amount);
+                this.calculateOtherCost();
+            }
+        });
+    }
+
+    // 비용 항목 추가 모달 표시
+    showAddCostItemModal() {
+        const modalHTML = `
+            <div class="modal-overlay" id="addCostItemModal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 class="modal-title">비용 항목 추가</h3>
+                        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label for="newCostName">비용 항목명</label>
+                            <input type="text" id="newCostName" placeholder="예: 임대료, 보험료, 유지보수비" maxlength="20">
+                        </div>
+                        <div class="form-group">
+                            <label for="newCostType">비용 유형</label>
+                            <select id="newCostType">
+                                <option value="custom">사용자 정의</option>
+                                <option value="rent">임대료</option>
+                                <option value="insurance">보험료</option>
+                                <option value="maintenance">유지보수비</option>
+                                <option value="utilities">공과금</option>
+                                <option value="travel">출장비</option>
+                                <option value="training">교육훈련비</option>
+                                <option value="legal">법무비</option>
+                                <option value="consulting">컨설팅비</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="newCostAmount">기본 금액</label>
+                            <input type="text" id="newCostAmount" placeholder="금액 입력" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="newCostVariableRatio">변동비 비율 (%)</label>
+                            <input type="range" id="newCostVariableRatio" min="0" max="100" value="30">
+                            <div class="ratio-display-new">
+                                <span class="variable-label-new">변동비</span>
+                                <span class="variable-ratio-new" id="newCostVariableValue">30%</span>
+                                <span class="ratio-separator-new">-</span>
+                                <span class="fixed-ratio-new" id="newCostFixedValue">70%</span>
+                                <span class="fixed-label-new">고정비</span>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn-secondary" onclick="this.closest('.modal-overlay').remove()">취소</button>
+                            <button type="button" class="btn-primary" id="confirmAddCostItem">추가</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+        // 모달 내 이벤트 설정
+        const modal = document.getElementById('addCostItemModal');
+        
+        // 비용 유형 선택 시 자동 입력
+        document.getElementById('newCostType').addEventListener('change', (e) => {
+            const costType = e.target.value;
+            const nameInput = document.getElementById('newCostName');
+            
+            if (costType !== 'custom') {
+                const costNames = {
+                    'rent': '임대료',
+                    'insurance': '보험료',
+                    'maintenance': '유지보수비',
+                    'utilities': '공과금',
+                    'travel': '출장비',
+                    'training': '교육훈련비',
+                    'legal': '법무비',
+                    'consulting': '컨설팅비'
+                };
+                nameInput.value = costNames[costType];
+            }
+        });
+
+        // 변동비 슬라이더 이벤트
+        document.getElementById('newCostVariableRatio').addEventListener('input', (e) => {
+            const variableRatio = parseInt(e.target.value);
+            const fixedRatio = 100 - variableRatio;
+            
+            document.getElementById('newCostVariableValue').textContent = `${variableRatio}%`;
+            document.getElementById('newCostFixedValue').textContent = `${fixedRatio}%`;
+        });
+
+        // 금액 입력 포맷팅
+        document.getElementById('newCostAmount').addEventListener('blur', (e) => {
+            const value = parseFloat(e.target.value.replace(/,/g, '')) || 0;
+            e.target.value = this.formatNumber(value);
+        });
+
+        // 추가 버튼 이벤트
+        document.getElementById('confirmAddCostItem').addEventListener('click', () => {
+            this.addNewCostItem();
+        });
+    }
+
+    // 새로운 비용 항목 추가
+    addNewCostItem() {
+        const name = document.getElementById('newCostName').value.trim();
+        const amount = this.parseFormattedNumber(document.getElementById('newCostAmount').value);
+        const variableRatio = parseInt(document.getElementById('newCostVariableRatio').value);
+        
+        if (!name) {
+            alert('비용 항목명을 입력해주세요.');
+            return;
+        }
+
+        // 고유한 costType 생성
+        const costType = this.generateUniqueCostType(name);
+        
+        // 비용 항목 HTML 생성
+        const costItemHTML = `
+            <div class="cost-item dynamic-cost adding" data-cost-type="${costType}">
+                <div class="cost-item-header">
+                    <label>${name}</label>
+                    <button type="button" class="btn-remove-cost" title="비용 항목 삭제">×</button>
+                </div>
+                <div class="cost-input-group">
+                    <label>금액</label>
+                    <input type="text" id="${costType}-amount" placeholder="금액" min="0" value="${this.formatNumber(amount)}">
+                </div>
+                <div class="slider-container">
+                    <div class="slider-group">
+                        <div class="ratio-display-new">
+                            <span class="variable-label-new">변동비</span>
+                            <span class="variable-ratio-new" id="${costType}-variable-value">${variableRatio}%</span>
+                            <span class="ratio-separator-new">-</span>
+                            <span class="fixed-ratio-new" id="${costType}-fixed-value">${100 - variableRatio}%</span>
+                            <span class="fixed-label-new">고정비</span>
+                        </div>
+                        <input type="range" id="${costType}-variable" class="slider-input" value="${variableRatio}" min="0" max="100">
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // 동적 비용 항목 컨테이너에 추가
+        const container = document.getElementById('dynamicCostItems');
+        container.insertAdjacentHTML('beforeend', costItemHTML);
+
+        // 데이터에 추가
+        this.addCostItemToData(costType, name, amount, variableRatio);
+        
+        // 고정비 성장률 설정에도 추가
+        this.addDynamicCostGrowthScenario(costType, { mean: 2, stdDev: 0.5 });
+
+        // 모달 닫기
+        document.getElementById('addCostItemModal').remove();
+
+        // 애니메이션 클래스 제거
+        setTimeout(() => {
+            const newItem = document.querySelector(`[data-cost-type="${costType}"]`);
+            if (newItem) {
+                newItem.classList.remove('adding');
+            }
+        }, 300);
+    }
+
+    // 고유한 costType 생성
+    generateUniqueCostType(name) {
+        const baseType = name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        let costType = baseType;
+        let counter = 1;
+        
+        // 기존 costType들과 중복되지 않도록 확인
+        while (document.querySelector(`[data-cost-type="${costType}"]`)) {
+            costType = `${baseType}${counter}`;
+            counter++;
+        }
+        
+        return costType;
+    }
+
+    // 데이터에 비용 항목 추가
+    addCostItemToData(costType, name, amount, variableRatio) {
+        const currentData = dataManager.getData();
+        if (currentData) {
+            // 비용 구조에 추가
+            currentData.financialStructure.costStructure[costType] = {
+                amount: amount,
+                variableRatio: variableRatio,
+                fixedRatio: 100 - variableRatio
+            };
+
+            // 고정비 성장률에 추가 (기본값)
+            currentData.scenarioModel.fixedCostGrowth[costType] = {
+                mean: 2,
+                stdDev: 0.5
+            };
+
+            dataManager.saveData(currentData);
+        }
+    }
+
+    // 비용 항목 삭제
+    removeCostItem(costType, costItem) {
+        if (confirm('이 비용 항목을 삭제하시겠습니까?')) {
+            // 애니메이션 클래스 추가
+            costItem.classList.add('removing');
+            
+            // 애니메이션 완료 후 삭제
+            setTimeout(() => {
+                costItem.remove();
+                
+                // 데이터에서 제거
+                this.removeCostItemFromData(costType);
+                
+                // 고정비 성장률 설정에서도 제거
+                this.removeDynamicCostGrowthScenario(costType);
+                
+                // 기타 비용 재계산
+                this.calculateOtherCost();
+            }, 300);
+        }
+    }
+
+    // 데이터에서 비용 항목 제거
+    removeCostItemFromData(costType) {
+        const currentData = dataManager.getData();
+        if (currentData) {
+            // 비용 구조에서 제거
+            delete currentData.financialStructure.costStructure[costType];
+            
+            // 고정비 성장률에서 제거
+            delete currentData.scenarioModel.fixedCostGrowth[costType];
+            
+            dataManager.saveData(currentData);
+        }
+    }
+
     // 데이터 로드
-    loadData() {
-        const data = dataManager.getData();
+    async loadData() {
+        const data = await dataManager.getData();
         if (data) {
-            this.populateFormData(data);
+            await this.populateFormData(data);
         }
     }
 
     // 폼 데이터 채우기
-    populateFormData(data) {
+    async populateFormData(data) {
+        // 데이터 구조 확인
+        if (!data || !data.financialStructure) {
+            console.warn('데이터 구조가 올바르지 않습니다:', data);
+            return;
+        }
+        
         // 기업 정보
         const { companyInfo, incomeStatement, businessSegments, costStructure } = data.financialStructure;
         
-        document.getElementById('companyName').value = companyInfo.name || '';
-        document.getElementById('discountRate').value = companyInfo.discountRate || 10;
-        document.getElementById('taxRate').value = companyInfo.taxRate || 25;
-        document.getElementById('forecastPeriod').value = companyInfo.forecastPeriod || 15;
-        document.getElementById('terminalGrowthRate').value = companyInfo.terminalGrowthRate || 2.5;
-        document.getElementById('marketValue').value = this.formatNumber(companyInfo.marketValue || 0);
-        document.getElementById('apiKey').value = companyInfo.apiKey || '';
+        if (companyInfo) {
+            const companyNameElement = document.getElementById('companyName');
+            if (companyNameElement) companyNameElement.value = companyInfo.name || '';
+            
+            const discountRateElement = document.getElementById('discountRate');
+            if (discountRateElement) discountRateElement.value = companyInfo.discountRate || 10;
+            
+            const taxRateElement = document.getElementById('taxRate');
+            if (taxRateElement) taxRateElement.value = companyInfo.taxRate || 25;
+            
+            const forecastPeriodElement = document.getElementById('forecastPeriod');
+            if (forecastPeriodElement) forecastPeriodElement.value = companyInfo.forecastPeriod || 15;
+            
+            const terminalGrowthRateElement = document.getElementById('terminalGrowthRate');
+            if (terminalGrowthRateElement) terminalGrowthRateElement.value = companyInfo.terminalGrowthRate || 2.5;
+            
+            const marketValueElement = document.getElementById('marketValue');
+            if (marketValueElement) marketValueElement.value = this.formatNumber(companyInfo.marketValue || 0);
+        }
 
         // 손익계산서
-        document.getElementById('revenue').value = this.formatNumber(incomeStatement.revenue || 0);
-        document.getElementById('costOfGoodsSold').value = this.formatNumber(incomeStatement.costOfGoodsSold || 0);
-        document.getElementById('operatingIncome').value = this.formatNumber(incomeStatement.operatingIncome || 0);
+        if (incomeStatement) {
+            const revenueElement = document.getElementById('revenue');
+            const costOfGoodsSoldElement = document.getElementById('costOfGoodsSold');
+            const operatingIncomeElement = document.getElementById('operatingIncome');
+            
+            if (revenueElement) revenueElement.value = this.formatNumber(incomeStatement.revenue || 0);
+            if (costOfGoodsSoldElement) costOfGoodsSoldElement.value = this.formatNumber(incomeStatement.costOfGoodsSold || 0);
+            if (operatingIncomeElement) operatingIncomeElement.value = this.formatNumber(incomeStatement.operatingIncome || 0);
+        }
+        
         this.calculateGrossProfit();
         this.calculateOtherSegmentRevenue();
         this.calculateOtherCost();
 
         // 사업부문
-        this.populateBusinessSegments(businessSegments);
+        if (businessSegments) {
+            await this.populateBusinessSegments(businessSegments);
+        }
 
         // 비용 구조
-        this.populateCostStructure(costStructure);
+        if (costStructure) {
+            this.populateCostStructure(costStructure);
+        }
         
         // 기타 매출액 계산 (데이터 로드 후)
         this.calculateOtherSegmentRevenue();
 
         // 고정비 성장률
-        const { fixedCostGrowth } = data.scenarioModel;
-        this.populateFixedCostGrowth(fixedCostGrowth);
+        if (data.scenarioModel && data.scenarioModel.fixedCostGrowth) {
+            const { fixedCostGrowth } = data.scenarioModel;
+            this.populateFixedCostGrowth(fixedCostGrowth);
+        }
         
         // 현재 페이지가 2페이지라면 시나리오 설정
         if (this.currentPage === 2) {
             console.log('populateFormData에서 setupPage2Scenarios 호출');
-            this.setupPage2Scenarios();
+            await this.setupPage2Scenarios();
         }
     }
 
     // 사업부문 데이터 채우기
-    populateBusinessSegments(segments) {
+    async populateBusinessSegments(segments) {
         const container = document.getElementById('businessSegments');
+        if (!container) return;
+        
         container.innerHTML = '';
 
-        if (segments.length === 0) {
-            this.addBusinessSegment();
+        if (!segments || segments.length === 0) {
+            await this.addBusinessSegment();
         } else {
-            segments.forEach(segment => {
-                this.addBusinessSegment(segment.name, segment.revenue);
-            });
+            for (const segment of segments) {
+                await this.addBusinessSegment(segment.name, segment.revenue);
+            }
         }
         
         // 기타 사업부문 매출 계산
@@ -493,10 +1375,14 @@ class ValueWebApp {
 
     // 비용 구조 데이터 채우기
     populateCostStructure(costStructure) {
-        const costTypes = ['cogs', 'depreciation', 'labor', 'rd', 'advertising', 'other'];
+        if (!costStructure) return;
         
-        costTypes.forEach(type => {
+        // 고정 비용 항목들 (매출원가, 기타 비용)
+        const fixedCostTypes = ['cogs', 'other'];
+        
+        fixedCostTypes.forEach(type => {
             const cost = costStructure[type];
+            if (!cost) return;
             
             // 금액 설정
             const amountInput = document.getElementById(`${type}-amount`);
@@ -518,21 +1404,191 @@ class ValueWebApp {
                 fixedValue.textContent = `${fixedRatio}%`;
             }
         });
+
+        // 동적 비용 항목들 로드
+        this.loadDynamicCostItems(costStructure);
+    }
+
+    // 동적 비용 항목들 로드
+    loadDynamicCostItems(costStructure) {
+        const container = document.getElementById('dynamicCostItems');
+        if (!container) return;
+
+        // 기존 동적 비용 항목들 제거 (기본 항목들 제외)
+        const existingItems = container.querySelectorAll('.dynamic-cost');
+        existingItems.forEach(item => {
+            const costType = item.dataset.costType;
+            // 기본 항목들(depreciation, labor, rd, advertising)은 유지
+            if (!['depreciation', 'labor', 'rd', 'advertising'].includes(costType)) {
+                item.remove();
+            }
+        });
+
+        // 모든 비용 항목들을 순회하면서 동적 항목들 추가
+        Object.keys(costStructure).forEach(costType => {
+            // 고정 항목들 제외
+            if (['cogs', 'other'].includes(costType)) return;
+            
+            const cost = costStructure[costType];
+            if (!cost) return;
+
+            // 이미 존재하는 기본 항목들은 업데이트만
+            const existingItem = container.querySelector(`[data-cost-type="${costType}"]`);
+            if (existingItem) {
+                this.updateExistingCostItem(existingItem, cost);
+                return;
+            }
+
+            // 새로운 동적 항목 추가
+            this.addDynamicCostItem(costType, cost);
+        });
+    }
+
+    // 기존 비용 항목 업데이트
+    updateExistingCostItem(costItem, cost) {
+        // 금액 업데이트
+        const amountInput = costItem.querySelector('input[id$="-amount"]');
+        if (amountInput) {
+            amountInput.value = this.formatNumber(cost.amount || 0);
+        }
+
+        // 슬라이더 업데이트
+        const variableSlider = costItem.querySelector('.slider-input');
+        const variableValue = costItem.querySelector('.variable-ratio-new');
+        const fixedValue = costItem.querySelector('.fixed-ratio-new');
+        
+        if (variableSlider && variableValue && fixedValue) {
+            const variableRatio = cost.variableRatio || 0;
+            const fixedRatio = 100 - variableRatio;
+            
+            variableSlider.value = variableRatio;
+            variableValue.textContent = `${variableRatio}%`;
+            fixedValue.textContent = `${fixedRatio}%`;
+        }
+    }
+
+    // 동적 비용 항목 추가 (데이터 로드용)
+    addDynamicCostItem(costType, cost) {
+        const container = document.getElementById('dynamicCostItems');
+        if (!container) return;
+
+        // 비용 항목명 결정
+        const costNames = {
+            'depreciation': '감가상각비',
+            'labor': '인건비',
+            'rd': '연구개발비',
+            'advertising': '광고선전비'
+        };
+        
+        const name = costNames[costType] || costType;
+
+        // 비용 항목 HTML 생성
+        const costItemHTML = `
+            <div class="cost-item dynamic-cost" data-cost-type="${costType}">
+                <div class="cost-item-header">
+                    <label>${name}</label>
+                    <button type="button" class="btn-remove-cost" title="비용 항목 삭제">×</button>
+                </div>
+                <div class="cost-input-group">
+                    <label>금액</label>
+                    <input type="text" id="${costType}-amount" placeholder="금액" min="0" value="${this.formatNumber(cost.amount || 0)}">
+                </div>
+                <div class="slider-container">
+                    <div class="slider-group">
+                        <div class="ratio-display-new">
+                            <span class="variable-label-new">변동비</span>
+                            <span class="variable-ratio-new" id="${costType}-variable-value">${cost.variableRatio || 0}%</span>
+                            <span class="ratio-separator-new">-</span>
+                            <span class="fixed-ratio-new" id="${costType}-fixed-value">${100 - (cost.variableRatio || 0)}%</span>
+                            <span class="fixed-label-new">고정비</span>
+                        </div>
+                        <input type="range" id="${costType}-variable" class="slider-input" value="${cost.variableRatio || 0}" min="0" max="100">
+                    </div>
+                </div>
+            </div>
+        `;
+
+        container.insertAdjacentHTML('beforeend', costItemHTML);
     }
 
     // 고정비 성장률 데이터 채우기
     populateFixedCostGrowth(fixedCostGrowth) {
-        const costTypes = ['cogs', 'depreciation', 'labor', 'rd', 'advertising', 'other'];
+        if (!fixedCostGrowth) return;
         
-        costTypes.forEach(type => {
+        // 고정 비용 항목들 (매출원가, 기타 비용)
+        const fixedCostTypes = ['cogs', 'other'];
+        
+        fixedCostTypes.forEach(type => {
             const growth = fixedCostGrowth[type];
-            document.getElementById(`${type}-fixed-mean`).value = growth.mean || 2;
-            document.getElementById(`${type}-fixed-std`).value = growth.stdDev || 0.5;
+            if (!growth) return;
+            
+            const meanInput = document.getElementById(`${type}-fixed-mean`);
+            const stdInput = document.getElementById(`${type}-fixed-std`);
+            
+            if (meanInput) meanInput.value = growth.mean || 2;
+            if (stdInput) stdInput.value = growth.stdDev || 0.5;
+        });
+
+        // 동적 비용 항목들의 고정비 성장률 로드
+        this.loadDynamicCostGrowthScenarios(fixedCostGrowth);
+    }
+
+    // 동적 비용 항목들의 고정비 성장률 로드
+    loadDynamicCostGrowthScenarios(fixedCostGrowth) {
+        if (!fixedCostGrowth) return;
+        
+        const container = document.getElementById('dynamicCostGrowthScenarios');
+        if (!container) return;
+
+        // 기존 동적 성장률 설정들 제거
+        container.innerHTML = '';
+
+        // 모든 비용 항목들을 순회하면서 동적 항목들의 성장률 설정 추가
+        Object.keys(fixedCostGrowth).forEach(costType => {
+            // 고정 항목들 제외
+            if (['cogs', 'other'].includes(costType)) return;
+            
+            const growth = fixedCostGrowth[costType];
+            if (!growth) return;
+
+            this.addDynamicCostGrowthScenario(costType, growth);
         });
     }
 
+    // 동적 비용 항목의 고정비 성장률 설정 추가
+    addDynamicCostGrowthScenario(costType, growth) {
+        const container = document.getElementById('dynamicCostGrowthScenarios');
+        if (!container) return;
+
+        // 비용 항목명 결정
+        const costNames = {
+            'depreciation': '감가상각비',
+            'labor': '인건비',
+            'rd': '연구개발비',
+            'advertising': '광고선전비'
+        };
+        
+        const name = costNames[costType] || costType;
+
+        const scenarioHTML = `
+            <div class="cost-scenario" data-cost-type="${costType}">
+                <label>${name} 고정비</label>
+                <div class="scenario-input-group">
+                    <label>평균 성장률 (%)</label>
+                    <input type="number" id="${costType}-fixed-mean" placeholder="평균 성장률 (%)" step="0.1" value="${growth.mean || 2}">
+                </div>
+                <div class="scenario-input-group">
+                    <label>표준편차 (%)</label>
+                    <input type="number" id="${costType}-fixed-std" placeholder="표준편차 (%)" step="0.1" value="${growth.stdDev || 0.5}">
+                </div>
+            </div>
+        `;
+
+        container.insertAdjacentHTML('beforeend', scenarioHTML);
+    }
+
     // 사업부문 추가
-    addBusinessSegment(name = '', revenue = '') {
+    async addBusinessSegment(name = '', revenue = '') {
         const container = document.getElementById('businessSegments');
         const segmentDiv = document.createElement('div');
         segmentDiv.className = 'segment-item';
@@ -583,11 +1639,11 @@ class ValueWebApp {
         container.appendChild(segmentDiv);
         
         // 새로 추가된 사업부문 데이터 업데이트
-        this.updateBusinessSegments();
+        await this.updateBusinessSegments();
     }
 
     // 사업부문 데이터 업데이트
-    updateBusinessSegments() {
+    async updateBusinessSegments() {
         const segments = [];
         document.querySelectorAll('.segment-item:not(.other-segment)').forEach(item => {
             const name = item.querySelector('.segment-name').value.trim();
@@ -600,9 +1656,9 @@ class ValueWebApp {
         });
 
         const currentData = dataManager.getData();
-        if (currentData) {
+        if (currentData && currentData.financialStructure) {
             currentData.financialStructure.businessSegments = segments;
-            dataManager.saveData(currentData);
+            await dataManager.saveData(currentData);
             
             // 기타 사업부문 매출 자동 계산 및 UI 업데이트
             this.calculateOtherSegmentRevenue();
@@ -611,27 +1667,59 @@ class ValueWebApp {
             console.log('사업부문 업데이트:', {
                 segments: segments,
                 totalSegmentRevenue: segments.reduce((sum, seg) => sum + seg.revenue, 0),
-                totalRevenue: currentData.financialStructure.incomeStatement.revenue,
+                totalRevenue: currentData.financialStructure.incomeStatement?.revenue || 0,
                 otherRevenue: dataManager.calculateOtherSegmentRevenue()
             });
         }
     }
 
     // 기업 정보 업데이트
-    updateCompanyInfo(field, value) {
-        const currentData = dataManager.getData();
-        if (currentData) {
-            currentData.financialStructure.companyInfo[field] = value;
-            dataManager.saveData(currentData);
+    async updateCompanyInfo(field, value) {
+        let currentData = dataManager.getData();
+        
+        // 데이터가 없으면 초기화
+        if (!currentData) {
+            currentData = {
+                financialStructure: {
+                    companyInfo: {},
+                    incomeStatement: {},
+                    businessSegments: [],
+                    costStructure: {}
+                },
+                scenarioModel: {
+                    segmentScenarios: {},
+                    fixedCostGrowth: {}
+                }
+            };
         }
+        
+        // financialStructure가 없으면 초기화
+        if (!currentData.financialStructure) {
+            currentData.financialStructure = {
+                companyInfo: {},
+                incomeStatement: {},
+                businessSegments: [],
+                costStructure: {}
+            };
+        }
+        
+        // companyInfo가 없으면 초기화
+        if (!currentData.financialStructure.companyInfo) {
+            currentData.financialStructure.companyInfo = {};
+        }
+        
+        currentData.financialStructure.companyInfo[field] = value;
+        await dataManager.saveData(currentData);
+        
+        console.log(`기업 정보 업데이트: ${field} = ${value}`);
     }
 
     // 손익계산서 업데이트
-    updateIncomeStatement(field, value) {
+    async updateIncomeStatement(field, value) {
         const currentData = dataManager.getData();
-        if (currentData) {
+        if (currentData && currentData.financialStructure && currentData.financialStructure.incomeStatement) {
             currentData.financialStructure.incomeStatement[field] = value;
-            dataManager.saveData(currentData);
+            await dataManager.saveData(currentData);
         }
     }
 
@@ -647,11 +1735,15 @@ class ValueWebApp {
     calculateOtherSegmentRevenue() {
         const otherRevenue = dataManager.calculateOtherSegmentRevenue();
         const formattedRevenue = this.formatNumber(otherRevenue);
-        document.getElementById('other-segment-revenue').value = formattedRevenue;
+        
+        const otherSegmentRevenueElement = document.getElementById('other-segment-revenue');
+        if (otherSegmentRevenueElement) {
+            otherSegmentRevenueElement.value = formattedRevenue;
+        }
         
         // 기타 매출액이 음수인 경우 경고 표시
         const otherSegmentElement = document.querySelector('.other-segment');
-        if (otherRevenue < 0) {
+        if (otherSegmentElement && otherRevenue < 0) {
             if (!otherSegmentElement.querySelector('.warning-message')) {
                 const warningDiv = document.createElement('div');
                 warningDiv.className = 'warning-message';
@@ -669,7 +1761,7 @@ class ValueWebApp {
                 warningDiv.textContent = '⚠️ 사업부문 매출 합계가 총 매출을 초과했습니다.';
                 otherSegmentElement.appendChild(warningDiv);
             }
-        } else {
+        } else if (otherSegmentElement) {
             // 경고 메시지 제거
             const warningMessage = otherSegmentElement.querySelector('.warning-message');
             if (warningMessage) {
@@ -683,15 +1775,18 @@ class ValueWebApp {
     // 기타 비용 계산
     calculateOtherCost() {
         const otherCost = dataManager.calculateOtherCost();
-        document.getElementById('other-amount').value = this.formatNumber(otherCost);
+        const otherAmountElement = document.getElementById('other-amount');
+        if (otherAmountElement) {
+            otherAmountElement.value = this.formatNumber(otherCost);
+        }
     }
 
     // 비용 구조 업데이트
-    updateCostStructure(type, field, value) {
+    async updateCostStructure(type, field, value) {
         const currentData = dataManager.getData();
-        if (currentData) {
+        if (currentData && currentData.financialStructure && currentData.financialStructure.costStructure && currentData.financialStructure.costStructure[type]) {
             currentData.financialStructure.costStructure[type][field] = value;
-            dataManager.saveData(currentData);
+            await dataManager.saveData(currentData);
         }
     }
 
@@ -702,11 +1797,451 @@ class ValueWebApp {
     }
 
     // 고정비 성장률 업데이트
-    updateFixedCostGrowth(type, field, value) {
+    async updateFixedCostGrowth(type, field, value) {
         const currentData = dataManager.getData();
-        if (currentData) {
+        if (currentData && currentData.scenarioModel && currentData.scenarioModel.fixedCostGrowth && currentData.scenarioModel.fixedCostGrowth[type]) {
             currentData.scenarioModel.fixedCostGrowth[type][field] = value;
-            dataManager.saveData(currentData);
+            await dataManager.saveData(currentData);
+        }
+    }
+
+    // 동적 비용 항목의 고정비 성장률 설정 제거
+    removeDynamicCostGrowthScenario(costType) {
+        const container = document.getElementById('dynamicCostGrowthScenarios');
+        if (!container) return;
+
+        const scenario = container.querySelector(`[data-cost-type="${costType}"]`);
+        if (scenario) {
+            scenario.remove();
+        }
+    }
+
+    // 동적 비용 항목들의 고정비 성장률 이벤트 설정
+    setupDynamicCostGrowthEvents() {
+        // 동적으로 생성되는 고정비 성장률 입력 필드들에 이벤트 리스너 추가
+        document.addEventListener('input', (e) => {
+            if (e.target.id && e.target.id.includes('-fixed-mean') && e.target.closest('#dynamicCostGrowthScenarios')) {
+                const costType = e.target.id.replace('-fixed-mean', '');
+                this.updateFixedCostGrowth(costType, 'mean', parseFloat(e.target.value));
+            }
+            
+            if (e.target.id && e.target.id.includes('-fixed-std') && e.target.closest('#dynamicCostGrowthScenarios')) {
+                const costType = e.target.id.replace('-fixed-std', '');
+                this.updateFixedCostGrowth(costType, 'stdDev', parseFloat(e.target.value));
+            }
+        });
+    }
+
+    // Portfolio Manager 이벤트 설정
+    setupPortfolioManagerEvents() {
+        // Portfolio Manager 버튼
+        const portfolioManagerBtn = document.getElementById('portfolio-manager-btn');
+        if (portfolioManagerBtn) {
+            portfolioManagerBtn.addEventListener('click', () => {
+                this.showPortfolioManager();
+            });
+        }
+
+        // 데이터 내보내기 (Portfolio에 업로드)
+        const exportDataSettingsBtn = document.getElementById('export-data-settings');
+        if (exportDataSettingsBtn) {
+            exportDataSettingsBtn.addEventListener('click', () => {
+                this.showUploadModal();
+            });
+        }
+
+        // 데이터 가져오기 (Portfolio에서 가져오기)
+        const importDataSettingsBtn = document.getElementById('import-data-settings');
+        if (importDataSettingsBtn) {
+            importDataSettingsBtn.addEventListener('click', () => {
+                this.showPortfolioManager();
+            });
+        }
+
+        // Portfolio Manager에서 Valuation Assistant로 돌아가기
+        const backToValuationBtn = document.getElementById('back-to-valuation');
+        if (backToValuationBtn) {
+            backToValuationBtn.addEventListener('click', () => {
+                this.hidePortfolioManager();
+            });
+        }
+
+        // Portfolio 새로고침
+        const refreshPortfolioBtn = document.getElementById('refresh-portfolio');
+        if (refreshPortfolioBtn) {
+            refreshPortfolioBtn.addEventListener('click', () => {
+                this.loadPortfolioData();
+            });
+        }
+    }
+
+    // Portfolio Manager 표시
+    showPortfolioManager() {
+        // 모든 페이지 숨기기
+        document.querySelectorAll('.page').forEach(page => {
+            page.classList.remove('active');
+        });
+
+        // Portfolio Manager 페이지 표시
+        const portfolioPage = document.getElementById('page7');
+        if (portfolioPage) {
+            portfolioPage.classList.add('active');
+        }
+
+        // Portfolio 데이터 로드
+        this.loadPortfolioData();
+    }
+
+    // Portfolio Manager 숨기기
+    hidePortfolioManager() {
+        // Portfolio Manager 페이지 숨기기
+        const portfolioPage = document.getElementById('page7');
+        if (portfolioPage) {
+            portfolioPage.classList.remove('active');
+        }
+
+        // 설정 페이지로 돌아가기
+        this.navigateToPage(6);
+    }
+
+    // Portfolio 데이터 로드
+    async loadPortfolioData() {
+        const portfolioList = document.getElementById('portfolio-list');
+        if (!portfolioList) return;
+
+        // 로딩 상태 표시
+        portfolioList.innerHTML = '<div class="portfolio-loading"><p>데이터를 불러오는 중...</p></div>';
+
+        try {
+            const sharedData = await this.getSharedValuations();
+            
+            if (sharedData.length === 0) {
+                portfolioList.innerHTML = `
+                    <div class="portfolio-empty">
+                        <h3>업로드된 데이터가 없습니다</h3>
+                        <p>첫 번째 데이터를 업로드해보세요!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // 데이터를 시간순으로 정렬 (최신순)
+            sharedData.sort((a, b) => b.uploadTime.toDate() - a.uploadTime.toDate());
+
+            // Portfolio 아이템들 생성
+            const portfolioItems = sharedData.map(item => this.createPortfolioItem(item));
+            portfolioList.innerHTML = portfolioItems.join('');
+
+            // 각 아이템에 이벤트 리스너 추가
+            this.setupPortfolioItemEvents();
+
+        } catch (error) {
+            console.error('Portfolio 데이터 로드 실패:', error);
+            portfolioList.innerHTML = `
+                <div class="portfolio-empty">
+                    <h3>데이터 로드 실패</h3>
+                    <p>잠시 후 다시 시도해주세요.</p>
+                </div>
+            `;
+        }
+    }
+
+    // 공유된 Valuation 데이터 가져오기
+    async getSharedValuations() {
+        try {
+            if (!window.firebaseConfig || !window.firebaseConfig.db) {
+                throw new Error('Firebase가 초기화되지 않았습니다.');
+            }
+
+            const snapshot = await window.firebaseConfig.db.collection('sharedValuations')
+                .orderBy('uploadTime', 'desc')
+                .get();
+
+            return snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+        } catch (error) {
+            console.error('공유 데이터 가져오기 실패:', error);
+            throw error;
+        }
+    }
+
+    // Portfolio 아이템 생성
+    createPortfolioItem(item) {
+        const uploadTime = item.uploadTime.toDate();
+        const formattedTime = uploadTime.toLocaleString('ko-KR');
+        
+        return `
+            <div class="portfolio-item" data-item-id="${item.id}">
+                <div class="portfolio-item-header">
+                    <div>
+                        <h3 class="portfolio-item-title">${item.title || '제목 없음'}</h3>
+                        <p class="portfolio-item-company">${item.companyName || '기업명 없음'}</p>
+                    </div>
+                </div>
+                <div class="portfolio-item-meta">
+                    <div class="portfolio-meta-item">
+                        <span class="portfolio-meta-label">업로드한 사용자:</span>
+                        <span>${item.userEmail || '익명 사용자'}</span>
+                    </div>
+                    <div class="portfolio-meta-item">
+                        <span class="portfolio-meta-label">업로드 시간:</span>
+                        <span>${formattedTime}</span>
+                    </div>
+                </div>
+                <div class="portfolio-item-actions">
+                    <button class="btn-import" onclick="window.valueWebApp.importFromPortfolio('${item.id}')">가져오기</button>
+                    ${item.userId === (window.firebaseConfig?.auth?.currentUser?.uid || '') ? 
+                        `<button class="btn-delete" onclick="window.valueWebApp.deleteFromPortfolio('${item.id}')">삭제</button>` : 
+                        ''
+                    }
+                </div>
+            </div>
+        `;
+    }
+
+    // Portfolio 아이템 이벤트 설정
+    setupPortfolioItemEvents() {
+        // 이벤트는 이미 HTML에 onclick으로 추가되어 있음
+    }
+
+    // Portfolio에서 데이터 가져오기
+    async importFromPortfolio(itemId) {
+        try {
+            const doc = await window.firebaseConfig.db.collection('sharedValuations').doc(itemId).get();
+            if (!doc.exists) {
+                alert('데이터를 찾을 수 없습니다.');
+                return;
+            }
+
+            const item = doc.data();
+            
+            // 현재 데이터를 덮어쓰기
+            await dataManager.saveData(item.data);
+            
+            // Portfolio Manager 숨기고 Valuation Assistant로 돌아가기
+            this.hidePortfolioManager();
+            
+            // 데이터 다시 로드
+            await this.loadData();
+            
+            alert('데이터를 성공적으로 가져왔습니다!');
+            
+        } catch (error) {
+            console.error('데이터 가져오기 실패:', error);
+            alert('데이터 가져오기에 실패했습니다.');
+        }
+    }
+
+    // Portfolio에서 데이터 삭제
+    async deleteFromPortfolio(itemId) {
+        if (!confirm('정말로 이 데이터를 삭제하시겠습니까?')) {
+            return;
+        }
+
+        try {
+            await window.firebaseConfig.db.collection('sharedValuations').doc(itemId).delete();
+            
+            // Portfolio 데이터 다시 로드
+            await this.loadPortfolioData();
+            
+            alert('데이터가 삭제되었습니다.');
+            
+        } catch (error) {
+            console.error('데이터 삭제 실패:', error);
+            alert('데이터 삭제에 실패했습니다.');
+        }
+    }
+
+    // 업로드 모달 표시
+    showUploadModal() {
+        const currentData = dataManager.getData();
+        if (!currentData) {
+            alert('업로드할 데이터가 없습니다. 먼저 기업 정보를 입력해주세요.');
+            return;
+        }
+
+        const modalHTML = `
+            <div class="upload-modal" id="uploadModal">
+                <div class="upload-modal-content">
+                    <div class="upload-modal-header">
+                        <h3 class="upload-modal-title">Portfolio에 업로드</h3>
+                        <button class="upload-modal-close" onclick="document.getElementById('uploadModal').remove()">&times;</button>
+                    </div>
+                    <form id="uploadForm">
+                        <div class="upload-form-group">
+                            <label for="uploadTitle">제목</label>
+                            <input type="text" id="uploadTitle" placeholder="예: 삼성전자 2024년 가치평가" required>
+                        </div>
+                        <div class="upload-form-group">
+                            <label for="uploadCompanyName">기업명</label>
+                            <input type="text" id="uploadCompanyName" value="${currentData.financialStructure?.companyInfo?.name || ''}" required>
+                        </div>
+                        <div class="upload-form-actions">
+                            <button type="button" class="btn-cancel" onclick="document.getElementById('uploadModal').remove()">취소</button>
+                            <button type="button" class="btn-upload" onclick="window.valueWebApp.uploadToPortfolio()">업로드</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+    }
+
+    // Portfolio에 업로드
+    async uploadToPortfolio() {
+        const title = document.getElementById('uploadTitle').value.trim();
+        const companyName = document.getElementById('uploadCompanyName').value.trim();
+
+        if (!title || !companyName) {
+            alert('제목과 기업명을 모두 입력해주세요.');
+            return;
+        }
+
+        try {
+            const currentData = dataManager.getData();
+            if (!currentData) {
+                alert('업로드할 데이터가 없습니다.');
+                return;
+            }
+
+            const currentUser = window.firebaseConfig.auth.currentUser;
+            if (!currentUser) {
+                alert('로그인이 필요합니다.');
+                return;
+            }
+
+            // Portfolio에 업로드
+            await window.firebaseConfig.db.collection('sharedValuations').add({
+                userId: currentUser.uid,
+                userEmail: currentUser.email || '익명 사용자',
+                title: title,
+                companyName: companyName,
+                uploadTime: firebase.firestore.FieldValue.serverTimestamp(),
+                data: currentData
+            });
+
+            // 모달 닫기
+            document.getElementById('uploadModal').remove();
+            
+            alert('Portfolio에 성공적으로 업로드되었습니다!');
+            
+        } catch (error) {
+            console.error('업로드 실패:', error);
+            alert('업로드에 실패했습니다.');
+        }
+    }
+
+    // 설정 페이지 이벤트 설정
+    setupSettingsEvents() {
+        // 메인으로 돌아가기 버튼
+        const backToMainBtn = document.getElementById('back-to-main');
+        if (backToMainBtn) {
+            backToMainBtn.addEventListener('click', () => {
+                this.navigateToPage(1);
+            });
+        }
+
+        // API 키 저장 버튼
+        const saveApiKeyBtn = document.getElementById('save-api-key');
+        if (saveApiKeyBtn) {
+            saveApiKeyBtn.addEventListener('click', () => {
+                this.saveApiKey();
+            });
+        }
+
+        // 설정 페이지 로드 시 사용자 정보 표시
+        this.loadUserSettings();
+    }
+
+    // 사용자 설정 로드
+    async loadUserSettings() {
+        try {
+            const currentUser = window.firebaseConfig?.auth?.currentUser;
+            if (!currentUser) return;
+
+            // 사용자 정보 표시
+            const settingsEmail = document.getElementById('settings-email');
+            const settingsCreated = document.getElementById('settings-created');
+            
+            if (settingsEmail) {
+                settingsEmail.textContent = currentUser.email || '익명 사용자';
+            }
+            
+            if (settingsCreated) {
+                const creationTime = new Date(currentUser.metadata.creationTime);
+                settingsCreated.textContent = creationTime.toLocaleDateString('ko-KR');
+            }
+
+            // API 키 로드
+            await this.loadApiKey();
+
+        } catch (error) {
+            console.error('사용자 설정 로드 실패:', error);
+        }
+    }
+
+    // API 키 로드
+    async loadApiKey() {
+        try {
+            const currentUser = window.firebaseConfig?.auth?.currentUser;
+            if (!currentUser) return;
+
+            const userSettingsDoc = await window.firebaseConfig.db.collection('userSettings').doc(currentUser.uid).get();
+            if (userSettingsDoc.exists) {
+                const settings = userSettingsDoc.data();
+                const apiKeyInput = document.getElementById('gemini-api-key');
+                const apiKeyStatus = document.getElementById('api-key-status');
+                
+                if (apiKeyInput && settings.geminiApiKey) {
+                    apiKeyInput.value = settings.geminiApiKey;
+                }
+                
+                if (apiKeyStatus) {
+                    apiKeyStatus.textContent = settings.geminiApiKey ? '설정됨' : '미설정';
+                    apiKeyStatus.style.color = settings.geminiApiKey ? '#28a745' : '#dc3545';
+                }
+            }
+        } catch (error) {
+            console.error('API 키 로드 실패:', error);
+        }
+    }
+
+    // API 키 저장
+    async saveApiKey() {
+        try {
+            const currentUser = window.firebaseConfig?.auth?.currentUser;
+            if (!currentUser) {
+                alert('로그인이 필요합니다.');
+                return;
+            }
+
+            const apiKey = document.getElementById('gemini-api-key').value.trim();
+            if (!apiKey) {
+                alert('API 키를 입력해주세요.');
+                return;
+            }
+
+            // Firestore에 저장
+            await window.firebaseConfig.db.collection('userSettings').doc(currentUser.uid).set({
+                geminiApiKey: apiKey,
+                lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+
+            // 상태 업데이트
+            const apiKeyStatus = document.getElementById('api-key-status');
+            if (apiKeyStatus) {
+                apiKeyStatus.textContent = '설정됨';
+                apiKeyStatus.style.color = '#28a745';
+            }
+
+            alert('API 키가 저장되었습니다.');
+
+        } catch (error) {
+            console.error('API 키 저장 실패:', error);
+            alert('API 키 저장에 실패했습니다.');
         }
     }
 
@@ -733,7 +2268,7 @@ class ValueWebApp {
     }
 
     // Page 2 시나리오 설정
-    setupPage2Scenarios() {
+    async setupPage2Scenarios() {
         console.log('setupPage2Scenarios 호출됨');
         const data = dataManager.getData();
         if (!data) {
@@ -767,14 +2302,14 @@ class ValueWebApp {
         }
 
         // 모든 카드에 대해 시나리오 로드
-        segments.forEach(segment => {
-            this.loadSegmentScenarios(segment.name);
+        for (const segment of segments) {
+            await this.loadSegmentScenarios(segment.name);
             this.updateAIReviewButton(segment.name);
-        });
+        }
         
         // 기타 사업부문 시나리오도 로드
         if (otherSegmentRevenue > 0) {
-            this.loadSegmentScenarios('기타 (Other)');
+            await this.loadSegmentScenarios('기타 (Other)');
             this.updateAIReviewButton('기타 (Other)');
         }
     }
@@ -813,7 +2348,7 @@ class ValueWebApp {
     }
 
     // 시나리오 추가
-    addScenario(segmentName) {
+    async addScenario(segmentName) {
         const container = document.getElementById(`scenarios-${segmentName}`);
         const scenarioDiv = document.createElement('div');
         scenarioDiv.className = 'scenario-item';
@@ -896,9 +2431,9 @@ class ValueWebApp {
         `;
 
         // 삭제 버튼 이벤트
-        scenarioDiv.querySelector('.btn-remove-scenario').addEventListener('click', () => {
+        scenarioDiv.querySelector('.btn-remove-scenario').addEventListener('click', async () => {
             container.removeChild(scenarioDiv);
-            this.updateSegmentScenarios(segmentName);
+            await this.updateSegmentScenarios(segmentName);
             this.updateAIReviewButton(segmentName);
         });
 
@@ -914,15 +2449,15 @@ class ValueWebApp {
 
         // 성장 모델 선택 이벤트
         const growthModelSelect = scenarioDiv.querySelector('.scenario-growth-model');
-        growthModelSelect.addEventListener('change', () => {
+        growthModelSelect.addEventListener('change', async () => {
             this.toggleGrowthModelInputs(scenarioDiv, growthModelSelect.value);
-            this.updateSegmentScenarios(segmentName);
+            await this.updateSegmentScenarios(segmentName);
         });
 
         // 입력 이벤트
         scenarioDiv.querySelectorAll('input').forEach(input => {
-            input.addEventListener('input', () => {
-                this.updateSegmentScenarios(segmentName);
+            input.addEventListener('input', async () => {
+                await this.updateSegmentScenarios(segmentName);
                 // 입력 후 AI Review 버튼 상태 업데이트
                 setTimeout(() => {
                     this.updateAIReviewButton(segmentName);
@@ -931,7 +2466,7 @@ class ValueWebApp {
         });
 
         container.appendChild(scenarioDiv);
-        this.updateSegmentScenarios(segmentName);
+        await this.updateSegmentScenarios(segmentName);
         
         // 시나리오 추가 후 즉시 AI Review 버튼 상태 업데이트
         setTimeout(() => {
@@ -954,7 +2489,7 @@ class ValueWebApp {
     }
 
     // 사업부문 시나리오 로드
-    loadSegmentScenarios(segmentName) {
+    async loadSegmentScenarios(segmentName) {
         const data = dataManager.getData();
         if (!data || !data.scenarioModel.segmentScenarios[segmentName]) return;
 
@@ -1052,9 +2587,9 @@ class ValueWebApp {
                 this.showNoteModal(segmentName, scenarioDiv);
             });
 
-                    scenarioDiv.querySelector('.btn-remove-scenario').addEventListener('click', () => {
+                    scenarioDiv.querySelector('.btn-remove-scenario').addEventListener('click', async () => {
             container.removeChild(scenarioDiv);
-            this.updateSegmentScenarios(segmentName);
+            await this.updateSegmentScenarios(segmentName);
             this.updateAIReviewButton(segmentName);
         });
 
@@ -1065,14 +2600,14 @@ class ValueWebApp {
 
             // 성장 모델 선택 이벤트
             const growthModelSelect = scenarioDiv.querySelector('.scenario-growth-model');
-            growthModelSelect.addEventListener('change', () => {
+            growthModelSelect.addEventListener('change', async () => {
                 this.toggleGrowthModelInputs(scenarioDiv, growthModelSelect.value);
-                this.updateSegmentScenarios(segmentName);
+                await this.updateSegmentScenarios(segmentName);
             });
 
             scenarioDiv.querySelectorAll('input').forEach(input => {
-                input.addEventListener('input', () => {
-                    this.updateSegmentScenarios(segmentName);
+                input.addEventListener('input', async () => {
+                    await this.updateSegmentScenarios(segmentName);
                     // 입력 후 AI Review 버튼 상태 업데이트
                     setTimeout(() => {
                         this.updateAIReviewButton(segmentName);
@@ -1099,7 +2634,7 @@ class ValueWebApp {
     }
 
     // 사업부문 시나리오 업데이트
-    updateSegmentScenarios(segmentName) {
+    async updateSegmentScenarios(segmentName) {
         const container = document.getElementById(`scenarios-${segmentName}`);
         const scenarios = [];
 
@@ -1151,7 +2686,7 @@ class ValueWebApp {
                 currentData.scenarioModel.segmentScenarios = {};
             }
             currentData.scenarioModel.segmentScenarios[segmentName] = scenarios;
-            dataManager.saveData(currentData);
+            await dataManager.saveData(currentData);
         }
 
         // 확률 합계 검증 및 경고 표시
@@ -1813,10 +3348,10 @@ class ValueWebApp {
     }
 
     // 데이터 가져오기
-    importData(file) {
+    async importData(file) {
         if (file) {
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = async (e) => {
                 try {
                     const data = JSON.parse(e.target.result);
                     console.log('가져오기 데이터 구조 확인:', {
@@ -1840,8 +3375,8 @@ class ValueWebApp {
                     });
                     
                     if (dataManager.validateData(data)) {
-                        dataManager.importData(data);
-                        this.loadData();
+                        await dataManager.importData(data);
+                        await this.loadData();
                         this.updateUI();
                         alert('데이터가 성공적으로 가져와졌습니다.');
                     } else {
@@ -1915,22 +3450,35 @@ class ValueWebApp {
 
     // AI 기업 분석
     async analyzeCompanyWithAI() {
-        const data = dataManager.getData();
-        if (!data) {
-            alert('데이터를 찾을 수 없습니다. 기업 정보를 먼저 입력해주세요.');
-            return;
-        }
-
-        const companyName = data.financialStructure.companyInfo.name;
-        const apiKey = data.financialStructure.companyInfo.apiKey;
-
-        if (!companyName.trim()) {
+        // 기업명을 직접 입력 필드에서 가져오기
+        const companyNameInput = document.getElementById('companyName');
+        const companyName = companyNameInput ? companyNameInput.value.trim() : '';
+        
+        if (!companyName) {
             alert('기업명을 입력해주세요.');
+            if (companyNameInput) {
+                companyNameInput.focus();
+            }
             return;
         }
+        
+        // 설정에서 저장된 API 키 가져오기
+        let apiKey = '';
+        try {
+            const currentUser = firebase.auth().currentUser;
+            if (currentUser) {
+                const userSettingsDoc = await firebase.firestore().collection('userSettings').doc(currentUser.uid).get();
+                if (userSettingsDoc.exists) {
+                    const settings = userSettingsDoc.data();
+                    apiKey = settings.geminiApiKey || '';
+                }
+            }
+        } catch (error) {
+            console.error('API 키 로드 오류:', error);
+        }
 
-        if (!apiKey.trim()) {
-            alert('Google AI Studio API 키를 입력해주세요.\n\nAPI 키 발급 방법:\n1. https://aistudio.google.com/ 접속\n2. API 키 생성\n3. 생성된 키를 여기에 입력');
+        if (!apiKey || !apiKey.trim()) {
+            alert('설정에서 Gemini API 키를 먼저 입력해주세요.\n\n설정 방법:\n1. 우측 상단 설정 버튼(⚙️) 클릭\n2. API 설정에서 Gemini API 키 입력\n3. 저장 후 다시 시도');
             return;
         }
 
@@ -1942,7 +3490,8 @@ class ValueWebApp {
         contentBox.innerHTML = '<div class="loading-text">분석 중...</div>';
 
         try {
-            const response = await this.callGeminiAPI(apiKey, companyName);
+            const prompt = `${companyName}의 사업을 설명해줘`;
+            const response = await this.callGeminiAPI(apiKey, prompt);
             contentBox.className = '';
             contentBox.textContent = response;
         } catch (error) {
@@ -1953,8 +3502,7 @@ class ValueWebApp {
     }
 
     // Gemini API 호출
-    async callGeminiAPI(apiKey, companyName) {
-        const prompt = `${companyName}의 사업을 설명해줘`;
+    async callGeminiAPI(apiKey, prompt) {
         
         try {
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
@@ -1993,22 +3541,35 @@ class ValueWebApp {
 
     // Cost Model Check
     async checkCostModel() {
-        const data = dataManager.getData();
-        if (!data) {
-            alert('데이터를 찾을 수 없습니다. 기업 정보를 먼저 입력해주세요.');
-            return;
-        }
-
-        const companyName = data.financialStructure.companyInfo.name;
-        const apiKey = data.financialStructure.companyInfo.apiKey;
-
-        if (!companyName.trim()) {
+        // 기업명을 직접 입력 필드에서 가져오기
+        const companyNameInput = document.getElementById('companyName');
+        const companyName = companyNameInput ? companyNameInput.value.trim() : '';
+        
+        if (!companyName) {
             alert('기업명을 입력해주세요.');
+            if (companyNameInput) {
+                companyNameInput.focus();
+            }
             return;
         }
+        
+        // 설정에서 저장된 API 키 가져오기
+        let apiKey = '';
+        try {
+            const currentUser = firebase.auth().currentUser;
+            if (currentUser) {
+                const userSettingsDoc = await firebase.firestore().collection('userSettings').doc(currentUser.uid).get();
+                if (userSettingsDoc.exists) {
+                    const settings = userSettingsDoc.data();
+                    apiKey = settings.geminiApiKey || '';
+                }
+            }
+        } catch (error) {
+            console.error('API 키 로드 오류:', error);
+        }
 
-        if (!apiKey.trim()) {
-            alert('Google AI Studio API 키를 입력해주세요.');
+        if (!apiKey || !apiKey.trim()) {
+            alert('설정에서 Gemini API 키를 먼저 입력해주세요.');
             return;
         }
 
@@ -2026,18 +3587,29 @@ class ValueWebApp {
 
     // Cost Model API 호출
     async callCostModelAPI(apiKey, companyName, data) {
+        if (!data || !data.financialStructure || !data.financialStructure.costStructure) {
+            throw new Error('비용 구조 데이터를 찾을 수 없습니다.');
+        }
+        
         const costStructure = data.financialStructure.costStructure;
+        
+        // 비용 항목들을 안전하게 가져오기
+        const cogs = costStructure.cogs || { amount: 0, variableRatio: 0 };
+        const depreciation = costStructure.depreciation || { amount: 0, variableRatio: 0 };
+        const labor = costStructure.labor || { amount: 0, variableRatio: 0 };
+        const rd = costStructure.rd || { amount: 0, variableRatio: 0 };
+        const advertising = costStructure.advertising || { amount: 0, variableRatio: 0 };
         
         const prompt = `${companyName}의 비용 구조를 매출원가, 감가상각비, 인건비, 연구개발비, 광고선전비로 나누어 분석하고싶어
 여기서 고정비는 비용 지출 중에서 고정으로 지출되는 비용 비중이고,
 변동비는 매출에 연동되는 비용 비중이야. 매출원가에는 생산직 인건비가 포함되어 있어
 
 현재
-매출원가 : ${this.formatNumber(costStructure.cogs.amount)} 중 변동비 비중 ${costStructure.cogs.variableRatio}%
-감가상각비 : ${this.formatNumber(costStructure.depreciation.amount)} 중 변동비 비중 ${costStructure.depreciation.variableRatio}%
-인건비 : ${this.formatNumber(costStructure.labor.amount)} 중 변동비 비중 ${costStructure.labor.variableRatio}%
-연구개발비 : ${this.formatNumber(costStructure.rd.amount)} 중 변동비 비중 ${costStructure.rd.variableRatio}%
-광고선전비 : ${this.formatNumber(costStructure.advertising.amount)} 중 변동비 비중 ${costStructure.advertising.variableRatio}%
+매출원가 : ${this.formatNumber(cogs.amount)} 중 변동비 비중 ${cogs.variableRatio}%
+감가상각비 : ${this.formatNumber(depreciation.amount)} 중 변동비 비중 ${depreciation.variableRatio}%
+인건비 : ${this.formatNumber(labor.amount)} 중 변동비 비중 ${labor.variableRatio}%
+연구개발비 : ${this.formatNumber(rd.amount)} 중 변동비 비중 ${rd.variableRatio}%
+광고선전비 : ${this.formatNumber(advertising.amount)} 중 변동비 비중 ${advertising.variableRatio}%
 
 재무 전문가 입장에서, 각 비용의 특성과 ${companyName}의 성격을 고려하여 위와 같은 매출 연동 비용에 대한 가정이
 타당한지 *각 항목에 대해* 비판적으로 분석해줘
@@ -2312,10 +3884,19 @@ class ValueWebApp {
                 if (scenario.growthModel === 'cagr') {
                     return initialRevenue * Math.pow(1 + (meanGrowthRate + stdDevGrowthRate) / 100, year);
                 } else {
-                    // Growth 모델: 영구성장률로 수렴
-                    const convergenceFactor = Math.min(1, year / forecastPeriod);
+                    // Growth 모델: 개선된 지수적 수렴
+                    const convergenceSpeed = 0.15;
+                    const convergenceFactor = 1 - Math.exp(-convergenceSpeed * year);
                     const effectiveGrowthRate = (meanGrowthRate + stdDevGrowthRate) * (1 - convergenceFactor) + terminalGrowthRate * convergenceFactor;
-                    return initialRevenue * Math.pow(1 + effectiveGrowthRate / 100, year);
+                    
+                    // 복리 효과를 고려한 매출 계산
+                    let revenue = initialRevenue;
+                    for (let i = 0; i < year; i++) {
+                        const yearConvergenceFactor = 1 - Math.exp(-convergenceSpeed * (i + 1));
+                        const yearGrowthRate = (meanGrowthRate + stdDevGrowthRate) * (1 - yearConvergenceFactor) + terminalGrowthRate * yearConvergenceFactor;
+                        revenue *= (1 + yearGrowthRate / 100);
+                    }
+                    return revenue;
                 }
             });
 
@@ -2324,10 +3905,19 @@ class ValueWebApp {
                 if (scenario.growthModel === 'cagr') {
                     return initialRevenue * Math.pow(1 + (meanGrowthRate - stdDevGrowthRate) / 100, year);
                 } else {
-                    // Growth 모델: 영구성장률로 수렴
-                    const convergenceFactor = Math.min(1, year / forecastPeriod);
+                    // Growth 모델: 개선된 지수적 수렴
+                    const convergenceSpeed = 0.15;
+                    const convergenceFactor = 1 - Math.exp(-convergenceSpeed * year);
                     const effectiveGrowthRate = (meanGrowthRate - stdDevGrowthRate) * (1 - convergenceFactor) + terminalGrowthRate * convergenceFactor;
-                    return initialRevenue * Math.pow(1 + effectiveGrowthRate / 100, year);
+                    
+                    // 복리 효과를 고려한 매출 계산
+                    let revenue = initialRevenue;
+                    for (let i = 0; i < year; i++) {
+                        const yearConvergenceFactor = 1 - Math.exp(-convergenceSpeed * (i + 1));
+                        const yearGrowthRate = (meanGrowthRate - stdDevGrowthRate) * (1 - yearConvergenceFactor) + terminalGrowthRate * yearConvergenceFactor;
+                        revenue *= (1 + yearGrowthRate / 100);
+                    }
+                    return revenue;
                 }
             });
 
@@ -2565,8 +4155,8 @@ class ValueWebApp {
         
         // 저장 버튼 이벤트 리스너 추가
         const saveBtn = document.getElementById('saveNoteBtn');
-        saveBtn.addEventListener('click', () => {
-            this.saveScenarioNote(segmentName, scenarioIndex);
+        saveBtn.addEventListener('click', async () => {
+            await this.saveScenarioNote(segmentName, scenarioIndex);
         });
         
         // 글자 수 카운터
@@ -2594,7 +4184,7 @@ class ValueWebApp {
     }
 
     // 시나리오 메모 저장
-    saveScenarioNote(segmentName, scenarioIndex) {
+    async saveScenarioNote(segmentName, scenarioIndex) {
         const noteText = document.getElementById('scenarioNote').value.trim();
         const data = dataManager.getData();
         
@@ -2616,7 +4206,7 @@ class ValueWebApp {
         
         // 노트 저장
         data.scenarioModel.segmentScenarios[segmentName][scenarioIndex].note = noteText;
-        dataManager.saveData(data);
+        await dataManager.saveData(data);
         
         console.log('노트 저장 완료:', {
             segmentName,
@@ -2724,7 +4314,9 @@ class ValueWebApp {
             return;
         }
 
-        const companyName = data.financialStructure.companyInfo.companyName || '회사';
+        // 기업명을 직접 입력 필드에서 가져오기
+        const companyNameInput = document.getElementById('companyName');
+        const companyName = companyNameInput ? companyNameInput.value.trim() : '회사';
         
         // 프롬프트 구성
         let prompt = `${companyName}의 ${segmentName}에 대해서, 시나리오를 다음과 같이 나눴어\n\n`;
@@ -2751,10 +4343,23 @@ class ValueWebApp {
         
         prompt += `\n------\n\n${companyName}의 ${segmentName} 및 연관분야 전문 애널리스트의 입장에서\n${segmentName}에 대한 SWOT 분석을 진행하고,\n이를 토대로 설정한 시나리오들을 비판적으로 검토해줘`;
 
-        // 저장된 API 키 확인
-        const apiKey = data.financialStructure.companyInfo.apiKey;
+        // 설정에서 저장된 API 키 가져오기
+        let apiKey = '';
+        try {
+            const currentUser = firebase.auth().currentUser;
+            if (currentUser) {
+                const userSettingsDoc = await firebase.firestore().collection('userSettings').doc(currentUser.uid).get();
+                if (userSettingsDoc.exists) {
+                    const settings = userSettingsDoc.data();
+                    apiKey = settings.geminiApiKey || '';
+                }
+            }
+        } catch (error) {
+            console.error('API 키 로드 오류:', error);
+        }
+
         if (!apiKey || !apiKey.trim()) {
-            alert('재무구조 분석에서 먼저 API 키를 설정해주세요.');
+            alert('설정에서 Gemini API 키를 먼저 입력해주세요.\n\n설정 방법:\n1. 우측 상단 설정 버튼(⚙️) 클릭\n2. API 설정에서 Gemini API 키 입력\n3. 저장 후 다시 시도');
             return;
         }
 
